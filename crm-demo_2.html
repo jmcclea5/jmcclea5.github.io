@@ -1,0 +1,1318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patch Map Demo · Jared McCleary</title>
+<link rel="icon" href="OGLOGO.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: console chrome (top bar + control strip) over a grouped honeycomb map; account detail slides in from the right. Dark-first. */
+:root{
+  --bg:#0f1218; --panel:#161b24; --panel-2:#1c2330; --line:#29313f; --line-2:#343e4f;
+  --fg:#e6e9ef; --fg-2:#a9b1c0; --fg-3:#768096; --accent:#8f7cf0; --accent-ink:#0f1218;
+  --hot:#e5432f; --warm:#f08a4b; --mid:#9e98ad; --cool:#4f8fe8; --cold:#2b5fd9;
+  --ok:#3fb27f; --warn:#e0a030; --bad:#e5432f;
+  --shadow:0 12px 40px rgba(0,0,0,.45);
+  --f-ui:"Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#f3f4f8; --panel:#ffffff; --panel-2:#f6f7fb; --line:#dfe2ea; --line-2:#cdd2de;
+  --fg:#161a22; --fg-2:#4a5263; --fg-3:#7a8296; --accent:#5b45d6; --accent-ink:#ffffff;
+  --mid:#b4aec2; --shadow:0 12px 40px rgba(20,24,40,.16); color-scheme:light }}
+:root[data-theme="light"]{
+  --bg:#f3f4f8; --panel:#ffffff; --panel-2:#f6f7fb; --line:#dfe2ea; --line-2:#cdd2de;
+  --fg:#161a22; --fg-2:#4a5263; --fg-3:#7a8296; --accent:#5b45d6; --accent-ink:#ffffff;
+  --mid:#b4aec2; --shadow:0 12px 40px rgba(20,24,40,.16); color-scheme:light }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg); color:var(--fg); font-family:var(--f-ui); font-size:14px; line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px)); padding-block:0 32px}
+body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top,0px); z-index:10; background:var(--bg)}
+a{color:var(--accent)}
+button,select,input{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.mono{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+
+/* top bar */
+.top{position:sticky; top:env(safe-area-inset-top,0px); z-index:5; background:var(--bg); padding-block:14px 10px; border-bottom:1px solid var(--line)}
+.brand{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap}
+.brand h1{font-size:19px; font-weight:700; margin:0; letter-spacing:-.01em}
+.brand .meta{color:var(--fg-3); font-size:12px}
+.controls{display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; margin-top:12px}
+.ctl{display:flex; align-items:center; gap:8px}
+.ctl > label, .lbl{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-3); font-weight:600}
+.seg{display:inline-flex; border:1px solid var(--line-2); border-radius:7px; overflow:hidden; background:var(--panel)}
+.seg button{border:0; background:transparent; padding:6px 11px; cursor:pointer; font-size:13px; color:var(--fg-2); white-space:nowrap}
+.seg button + button{border-left:1px solid var(--line-2)}
+.seg button[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink); font-weight:600}
+select, input[type="search"]{background:var(--panel); border:1px solid var(--line-2); border-radius:7px; padding:6px 9px; font-size:13px}
+input[type="search"]{width:190px}
+.legend{display:flex; align-items:center; gap:8px; margin-left:auto}
+.ramp{width:150px; height:10px; border-radius:3px; background:linear-gradient(90deg,var(--cold),var(--cool),var(--mid),var(--warm),var(--hot))}
+.legend span{font-size:11px; color:var(--fg-3)}
+
+.summary{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+.chip{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:3px 10px; font-size:12px; color:var(--fg-2)}
+.chip b{color:var(--fg); font-weight:600}
+.dot{width:8px; height:8px; border-radius:50%}
+
+/* map */
+.map{display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap:14px; margin-top:16px}
+.group{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 12px 10px; min-width:0}
+.group.wide{grid-column:1 / -1}
+.ghead{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:8px}
+.gname{font-weight:600; font-size:13px}
+.gname small{color:var(--fg-3); font-weight:400; margin-left:6px}
+.gstat{font-size:11px; color:var(--fg-3)}
+.hexwrap{width:100%; min-width:0}
+svg.hex{display:block; width:100%; overflow:visible}
+svg.hex polygon{cursor:pointer; stroke:var(--bg); stroke-width:1.5; transition:filter .12s, stroke .12s}
+svg.hex g:hover polygon, svg.hex g:focus polygon{filter:brightness(1.18); stroke:var(--fg); stroke-width:2}
+svg.hex g.sel polygon{stroke:var(--fg); stroke-width:3}
+svg.hex g.dim{opacity:.18}
+svg.hex text{pointer-events:none; font-family:var(--f-ui); font-size:9.5px; font-weight:600; fill:#0d1016}
+svg.hex text.light{fill:#ffffff}
+svg.hex g:focus{outline:none}
+.empty{color:var(--fg-3); font-size:13px; padding:12px 2px}
+
+.tip{position:fixed; z-index:30; pointer-events:none; background:var(--panel-2); border:1px solid var(--line-2); border-radius:8px; padding:8px 10px; box-shadow:var(--shadow); max-width:280px; font-size:12px}
+.tip .t1{font-weight:600; font-size:13px; margin-bottom:2px}
+.tip .t2{color:var(--fg-2)}
+
+/* side panel */
+.scrim{position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:19}
+.side{position:fixed; top:0; right:0; bottom:0; width:min(560px, 100vw); z-index:20; background:var(--panel); border-left:1px solid var(--line-2); box-shadow:var(--shadow);
+  display:flex; flex-direction:column; padding-top:env(safe-area-inset-top,0px); padding-right:env(safe-area-inset-right,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  transform:translateX(100%); transition:transform .22s ease}
+.side.open{transform:none}
+@media (prefers-reduced-motion: reduce){.side{transition:none}}
+.shead{padding:16px 18px 12px; border-bottom:1px solid var(--line)}
+.srow{display:flex; justify-content:space-between; gap:10px; align-items:flex-start}
+.shead h2{margin:0; font-size:20px; letter-spacing:-.01em; text-transform:capitalize; text-wrap:balance}
+.close{border:1px solid var(--line-2); background:var(--panel-2); border-radius:7px; width:32px; height:32px; cursor:pointer; flex:none; font-size:16px; line-height:1}
+.sub{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; margin-top:6px; font-size:12px; color:var(--fg-2)}
+.pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; border:1px solid var(--line-2)}
+.pill.paying{background:color-mix(in srgb, var(--ok) 18%, transparent); border-color:color-mix(in srgb, var(--ok) 50%, transparent)}
+.pill.churned{background:color-mix(in srgb, var(--warn) 18%, transparent); border-color:color-mix(in srgb, var(--warn) 50%, transparent)}
+.pill.prospect{background:color-mix(in srgb, var(--accent) 16%, transparent); border-color:color-mix(in srgb, var(--accent) 45%, transparent)}
+.gauges{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; margin-top:12px}
+.gauge{border:1px solid var(--line); border-radius:8px; padding:7px 9px; background:var(--panel-2); cursor:pointer; text-align:left}
+.gauge[aria-pressed="true"]{border-color:var(--accent)}
+.gauge .k{font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-3); font-weight:600}
+.gauge .v{display:flex; align-items:center; gap:7px; margin-top:3px}
+.gauge .sw{width:12px; height:12px; border-radius:3px; flex:none}
+.gauge .n{font-family:var(--f-mono); font-size:15px; font-weight:500}
+.gauge .d{font-size:11px; color:var(--fg-2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tabs{display:flex; gap:2px; padding:0 12px; border-bottom:1px solid var(--line); overflow-x:auto; scrollbar-width:none}
+.tabs button{border:0; background:transparent; padding:10px 9px; cursor:pointer; color:var(--fg-2); font-size:13px; border-bottom:2px solid transparent; white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--fg); border-bottom-color:var(--accent); font-weight:600}
+.tabs .ct{font-family:var(--f-mono); font-size:10px; color:var(--fg-3); margin-left:4px}
+.sbody{flex:1; overflow:auto; padding:16px 18px 28px}
+.sec{margin-bottom:22px}
+.sec h3{font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--fg-3); margin:0 0 8px; font-weight:600}
+.kv{display:grid; grid-template-columns:max-content 1fr; gap:5px 14px; font-size:13px}
+.kv dt{color:var(--fg-3)} .kv dd{margin:0; min-width:0; overflow-wrap:anywhere; text-transform:none}
+.notes{white-space:pre-wrap; font-size:13px; background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px 12px; color:var(--fg-2); max-height:280px; overflow:auto; overflow-wrap:anywhere}
+.why{display:grid; gap:10px}
+.why .w{border:1px solid var(--line); border-radius:8px; padding:9px 11px}
+.why .wh{display:flex; justify-content:space-between; gap:8px; font-size:13px; font-weight:600}
+.why ul{margin:6px 0 0; padding-left:16px; color:var(--fg-2); font-size:12.5px}
+.why li{margin:2px 0}
+.list{display:grid; gap:8px}
+.item{border:1px solid var(--line); border-radius:8px; padding:9px 11px; background:var(--panel-2); min-width:0}
+.item .ih{display:flex; justify-content:space-between; gap:10px; align-items:baseline}
+.item .it{font-weight:600; font-size:13px; text-transform:capitalize; overflow-wrap:anywhere}
+.item .id{font-family:var(--f-mono); font-size:11px; color:var(--fg-3); white-space:nowrap}
+.item .ib{font-size:12.5px; color:var(--fg-2); margin-top:3px; overflow-wrap:anywhere}
+.item.up{border-color:color-mix(in srgb, var(--accent) 55%, transparent)}
+.tag{display:inline-block; font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:1px 6px; border-radius:4px; margin-right:6px; vertical-align:1px; background:var(--line); color:var(--fg)}
+.tag.fund{background:#e5432f; color:#fff} .tag.exec{background:#f08a4b; color:#1a1208} .tag.acq{background:#c55bd6; color:#fff}
+.tag.hok{background:#d9a93a; color:#1a1208} .tag.init{background:#4f8fe8; color:#fff} .tag.hire{background:#3fb27f; color:#08140e}
+.tag.obs{background:#8f7cf0; color:#fff} .tag.prog{background:var(--line-2); color:var(--fg)}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.kchip{font-size:12px; border:1px solid var(--line-2); border-radius:999px; padding:2px 9px; color:var(--fg-2)}
+.kchip.tr{border-color:var(--hot); color:var(--fg)}
+.stats{display:grid; grid-template-columns:repeat(auto-fit, minmax(96px,1fr)); gap:8px}
+.stat{border:1px solid var(--line); border-radius:8px; padding:8px 10px}
+.stat .sv{font-family:var(--f-mono); font-size:17px}
+.stat .sk{font-size:11px; color:var(--fg-3)}
+.note{font-size:12px; color:var(--fg-3); margin-top:6px}
+.callout{border:1px dashed var(--line-2); border-radius:8px; padding:12px; color:var(--fg-2); font-size:13px}
+.callout a{font-weight:600}
+.met{font-size:10px; font-weight:700; color:var(--ok); border:1px solid color-mix(in srgb, var(--ok) 55%, transparent); border-radius:4px; padding:0 5px; margin-left:6px; text-transform:uppercase; letter-spacing:.05em}
+.links{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+.btn{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line-2); background:var(--panel-2); border-radius:7px; padding:5px 10px; font-size:12.5px; color:var(--fg); text-decoration:none; cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.help{position:relative}
+.scoring{margin-top:14px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:13px; color:var(--fg-2)}
+.scoring h4{margin:0 0 6px; font-size:13px; color:var(--fg)}
+.scoring .cols{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px,1fr)); gap:14px}
+.scoring ul{margin:4px 0 0; padding-left:16px}
+.repbar{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin-top:12px; padding:10px 12px; background:var(--panel); border:1px solid var(--line); border-radius:10px}
+.repbar select{min-width:180px}
+.repbar input[type="email"]{background:var(--panel-2); border:1px solid var(--line-2); border-radius:7px; padding:6px 9px; font-size:13px; width:230px; max-width:100%}
+.btn.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+.btn:disabled{opacity:.6; cursor:progress}
+#loadStatus{font-size:12.5px; color:var(--fg-2); min-width:0; flex:1 1 220px}
+#loadStatus[data-kind="err"]{color:var(--bad)} #loadStatus[data-kind="ok"]{color:var(--ok)}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+.onboard{padding:22px 24px; max-width:760px}
+.onboard h2{margin:0 0 10px; font-size:18px}
+.onboard ol{margin:0; padding-left:20px; display:grid; gap:6px; color:var(--fg-2)}
+.onboard ol b{color:var(--fg)}
+.diag{flex:1 1 100%; font-size:12.5px; color:var(--fg-2)}
+.diag summary{cursor:pointer; color:var(--fg-3); font-size:11px; text-transform:uppercase; letter-spacing:.08em; font-weight:600}
+.diag ul{margin:6px 0 0; padding-left:18px; columns:2 260px} .diag li{break-inside:avoid; margin:2px 0} .diag li.bad{color:var(--bad)}
+.eng{font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:1px 7px; border-radius:999px; white-space:nowrap; border:1px solid var(--line-2); color:var(--fg-2)}
+.eng.replied,.eng.connected{background:color-mix(in srgb, var(--hot) 22%, transparent); border-color:color-mix(in srgb, var(--hot) 55%, transparent); color:var(--fg)}
+.eng.clicked,.eng.opened{background:color-mix(in srgb, var(--warm) 18%, transparent); border-color:color-mix(in srgb, var(--warm) 50%, transparent); color:var(--fg)}
+.eng.touched{border-color:var(--mid)} .eng.none{border-color:color-mix(in srgb, var(--cold) 55%, transparent)}
+.item.lead.conv{opacity:.7}
+.item .it a{color:var(--fg); text-decoration:none} .item .it a:hover{color:var(--accent); text-decoration:underline}
+.sel{user-select:all}
+.orph{margin-top:18px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 14px 10px}
+.ohead{display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px 18px; align-items:flex-end; margin-bottom:10px}
+.ohead h2{margin:0; font-size:15px}
+.chk{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--fg-2); text-transform:none; letter-spacing:0; font-weight:400}
+.orows{display:grid; gap:4px}
+.orow{border:1px solid var(--line); border-radius:8px; background:var(--panel-2)}
+.orow[open]{border-color:var(--line-2)}
+.orow summary{display:grid; grid-template-columns:10px minmax(0,1fr) auto auto auto auto; gap:12px; align-items:center; padding:8px 11px; cursor:pointer; list-style:none; font-size:13px}
+.orow summary::-webkit-details-marker{display:none}
+.orow .oco{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; text-transform:capitalize}
+.orow .oco small{font-weight:400; color:var(--fg-3); margin-left:8px; text-transform:none}
+.orow .onum,.orow .odate{font-size:12px; color:var(--fg-2)}
+.orow .list{padding:0 10px 10px}
+@media (max-width:720px){ .orow summary{grid-template-columns:10px minmax(0,1fr) auto} .orow .onum,.orow .odate{display:none} }
+#sGauges{grid-template-columns:repeat(4, minmax(0,1fr))} @media (max-width:720px){ #sGauges{grid-template-columns:repeat(2, minmax(0,1fr))} }
+:root{--p1:#3ddc6e;--p2:#f5d63d;--p3:#a3abba;--p4:#ffffff}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--p1:#16a34a;--p2:#d4a900;--p3:#6b7385;--p4:#b9bfcc}}
+:root[data-theme="light"]{--p1:#16a34a;--p2:#d4a900;--p3:#6b7385;--p4:#b9bfcc}
+svg.hex polygon.pring{fill:none; pointer-events:none}
+.pdot{width:10px;height:10px;border-radius:3px;border:2.5px solid var(--p1)} .pdot.t2{border-color:var(--p2)} .pdot.t3{border-color:var(--p3)} .pdot.t4{border-color:var(--p4)}
+.pill.prio{border-width:2px; border-color:var(--p1)} .pill.prio.t2{border-color:var(--p2)} .pill.prio.t3{border-color:var(--p3)} .pill.prio.t4{border-color:var(--p4)}
+.prioed{border:1px solid var(--line); border-radius:8px; padding:10px 12px} .prow{display:flex; gap:8px; align-items:center; flex-wrap:wrap} .prioed textarea{width:100%; background:var(--panel-2); border:1px solid var(--line-2); border-radius:7px; padding:6px 9px; font:inherit; font-size:13px; color:var(--fg)}
+.lim{margin-top:10px; padding:9px 12px; border:1px solid color-mix(in srgb, var(--warn) 55%, transparent); background:color-mix(in srgb, var(--warn) 12%, transparent); border-radius:8px; font-size:12.5px; color:var(--fg-2)}
+.btn.sm{padding:3px 8px; font-size:12px}
+.ltog{display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:8px}
+.ltog .chk{font-size:13px; color:var(--fg)}
+.wtag{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; margin-left:8px; padding:1px 6px; border-radius:4px; background:var(--line); color:var(--fg-2)}
+.wtag.in{background:color-mix(in srgb, var(--accent) 22%, transparent); color:var(--fg)}
+.pv[hidden]{display:none}
+footer{margin-top:18px; font-size:12px; color:var(--fg-3)}
+@media (max-width: 720px){ .legend{margin-left:0} input[type="search"]{width:100%} .ctl.search{flex:1 1 100%} .gauges{grid-template-columns:1fr} }
+
+/* ---------- demo theme: light, neutral, one teal accent ---------- */
+:root, :root[data-theme], :root:not([data-theme="dark"]){
+  --bg:#f7f7f5; --panel:#ffffff; --panel-2:#f2f3f1; --line:#e3e4e0; --line-2:#d2d4ce;
+  --fg:#1d2321; --fg-2:#4b5551; --fg-3:#7d8783; --accent:#0f766e; --accent-ink:#ffffff;
+  --mid:#b9b4c2; --shadow:0 12px 40px rgba(20,28,26,.12);
+  --p1:#15803d; --p2:#ca8a04; --p3:#64748b; --p4:#1e293b;
+  --f-ui:"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+body{background:var(--bg)}
+.top{background:var(--bg)}
+.brand h1{font-weight:650; letter-spacing:-.02em}
+.demo-badge{background:#e6f2f0; color:var(--accent); border:1px solid #b9dcd7}
+.summary{display:none !important}
+
+/* one map, groups as centered clusters inside it */
+.map{display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start; gap:30px 48px;
+  background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:28px 24px 32px;
+  margin:18px auto 0; max-width:1400px; box-shadow:0 1px 2px rgba(20,28,26,.04)}
+.map .group, .map .group.wide{background:transparent; border:0; border-radius:0; padding:0; flex:0 0 auto; min-width:0; box-shadow:none; grid-column:auto}
+.map .ghead{justify-content:center; gap:10px; margin-bottom:10px; text-align:center}
+.map .gname{font-size:13px; font-weight:600; color:var(--fg-2)}
+.map .gname small{color:var(--fg-3)}
+.map .gstat{font-size:12px; color:var(--fg-3)}
+.map .hexwrap{margin:0 auto}
+svg.hex text{font-size:10px; fill:#1d2321}
+svg.hex text.light{fill:#ffffff}
+.seg button[aria-pressed="true"]{background:var(--accent); color:#fff}
+#diag{display:none !important}
+
+.sitebar{display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; padding:10px 0; font-size:13px; color:var(--fg-2); border-bottom:1px solid var(--line)}
+.sitebar a{font-weight:600; text-decoration:none; color:var(--fg)}
+.sitebar a:hover{color:var(--accent)}
+.demo-badge{font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-ink, #0f1218); background:var(--accent); border-radius:999px; padding:2px 8px; vertical-align:middle; margin-left:6px}
+</style>
+</head>
+<body>
+<div class="sitebar">
+  <a href="index.html">&larr; Jared McCleary</a>
+  <span>A tool I built to decide which accounts to work next. Click any hexagon to see why it scored the way it did.</span>
+</div>
+<div class="top">
+  <div class="brand">
+    <h1>Patch Map <span class="demo-badge">Demo</span></h1>
+    <span class="meta" id="meta"></span>
+  </div>
+  <div class="repbar">
+    <label for="repSel" class="lbl">Patch</label>
+    <select id="repSel" disabled></select>
+    <span id="emailWrap" hidden><label for="emailIn" class="sr">Email</label><input type="email" id="emailIn" placeholder="name@example.com" autocomplete="email"></span>
+    <button type="button" class="btn primary" id="loadBtn">Load patch</button>
+    <button type="button" class="btn" id="csvBtn" hidden>Download CSV</button>
+    <span id="loadStatus" role="status" aria-live="polite"></span>
+    <span id="sumbleStatus" class="sumst" role="status"></span>
+    <details id="diag" class="diag" hidden></details>
+  </div>
+  <div class="controls">
+    <div class="ctl"><span class="lbl" id="fillLbl">Fill by</span>
+      <div class="seg" role="group" aria-labelledby="fillLbl" id="fillSeg">
+        <button type="button" data-fill="overview">Overview</button>
+        <button type="button" data-fill="signals">Signals</button>
+        <button type="button" data-fill="outreach">My outreach</button>
+        <button type="button" data-fill="meetings">Meetings (12 mo)</button>
+      </div>
+    </div>
+    <div class="ctl"><label for="groupSel">Group by</label>
+      <select id="groupSel">
+        <option value="status">Status</option>
+        <option value="bucket">Outreach recency</option>
+        <option value="opp">Open opportunity</option>
+        <option value="size">Company size</option>
+        <option value="none">No grouping</option>
+      </select>
+    </div>
+    <div class="ctl search"><label for="q">Filter</label><input type="search" id="q" placeholder="Name, industry, person…" autocomplete="off"></div>
+    <div class="ctl" hidden style="display:none"><span class="lbl" id="sizeLbl">Tiles</span>
+      <div class="seg" role="group" aria-labelledby="sizeLbl" id="sizeSeg">
+        <button type="button" data-size="s">Compact</button>
+        <button type="button" data-size="l">Labeled</button>
+      </div>
+    </div>
+    <div class="legend" aria-label="Color scale"><span>Cold</span><div class="ramp"></div><span>Hot</span>
+      <button type="button" class="btn" id="howBtn" aria-expanded="false">How it's scored</button></div>
+  </div>
+  <div class="summary" id="summary"></div>
+  <div class="lim" id="limBanner" role="note" hidden></div>
+</div>
+
+<div class="scoring" id="scoring" hidden>
+  <div class="cols">
+    <div><h4>Overview</h4>
+      How good a target the account is right now, from everything on the page: signals (PSA, Sumble alerts from your email, Demandbase) count most, then inbound leads and marketing activity, past replies and connects, meetings and an open opportunity. The total is then adjusted for how hard the account has been hit lately: sprinting now ×0.55, touched in 15 days ×0.7, 15–30 days ×0.85, 30–45 days ×1.0, 45–60 days ×1.08, 60+ days ×1.15, never ×1.1. Strong signals on an account nobody has touched in a while score highest.</div>
+    <div><h4>Signals</h4>
+      PSA alerts from Salesforce (last 180 days) and Sumble alerts from your email, weighted by type and faded by age (full weight ≤30d, 70% ≤60d, 45% ≤90d, 20% ≤180d; repeats of the same type count half). Demandbase adds up to 25 points. Points are then eased onto 0–100, so one fresh funding round lands near 58 and two strong recent signals near 80.
+      <ul id="wList"></ul></div>
+    <div><h4>My outreach</h4>
+      Based on your own logged calls, emails and LinkedIn touches.
+      <ul><li>Sprinting: 5+ touches in the last 14 days → 100</li><li>Last touch ≤15 days → 80</li><li>15–30 days → 60</li><li>30–45 days → 40</li><li>45–60 days → 22</li><li>60+ days → 8</li><li>No touches in 24 months → 0</li></ul></div>
+    <div><h4>Meetings (12 mo)</h4>
+      Past calendar events on the account in the last 12 months, excluding reschedules.
+      <ul><li>1 → 35 · 2 → 50 · 3–4 → 65 · 5–7 → 78 · 8+ → 88</li><li>+12 if a meeting is on the calendar</li><li>+8 if the last meeting was in the past 30 days</li><li>None held but one scheduled → 30</li></ul></div>
+  </div>
+</div>
+
+<main class="map" id="map" aria-label="Account map"></main>
+<section class="orph" id="orphans" aria-label="Leads" hidden></section>
+<footer id="foot"></footer>
+
+<div class="tip" id="tip" hidden></div>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="side" id="side" aria-hidden="true" aria-labelledby="sName">
+  <div class="shead">
+    <div class="srow"><h2 id="sName"></h2><button class="close" id="closeBtn" type="button" aria-label="Close account panel">×</button></div>
+    <div class="sub" id="sSub"></div>
+    <div class="gauges" id="sGauges"></div>
+  </div>
+  <div class="tabs" role="tablist" id="sTabs"></div>
+  <div class="sbody" id="sBody"></div>
+</aside>
+<script>
+/* Demo runtime: stands in for the hosted app's storage and download services so the page runs as a plain static site.
+   Nothing leaves the browser: saves live in memory for this visit, and CSV downloads are built locally. */
+(function(){
+  const mem = {};
+  const docRef = path => ({
+    async get(){ return mem[path] ? { data: JSON.parse(JSON.stringify(mem[path])) } : null; },
+    async set(v){ mem[path] = JSON.parse(JSON.stringify(v)); },
+    async delete(){ delete mem[path]; }
+  });
+  const db = {
+    doc: docRef,
+    collection: name => ({ async get(){ return Object.keys(mem).filter(k => k.startsWith(name + "/")).map(k => ({ data: JSON.parse(JSON.stringify(mem[k])) })); } })
+  };
+  const downloads = {
+    async save({ filename, data, mimeType }){
+      const url = URL.createObjectURL(new Blob([data], { type: mimeType || "text/plain" }));
+      const a = document.createElement("a"); a.href = url; a.download = filename || "download.txt";
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  };
+  window.claude = { use: async name => name === "db" ? db : name === "downloads" ? downloads : null };
+})();
+</script>
+<script>
+/* Patch Map demo build. */
+const ROOT_EL = document;
+function SQL_PATCH(){ return ""; } function SQL_BATCH(){ return ""; } function SQL_ORPHAN_LEADS(){ return ""; }
+
+
+let DATA = null;
+let ASOF = new Date();
+const DAY = 864e5;
+const ago = d => d ? Math.round((ASOF - new Date(d + "T12:00:00")) / DAY) : null;
+const fmtD = d => { if (!d) return "—"; const x = new Date(d + "T12:00:00"); return x.toLocaleDateString("en-US", {month:"short", day:"numeric", year: x.getFullYear() === ASOF.getFullYear() ? undefined : "numeric"}); };
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const cap = s => String(s || "").replace(/\b\w/g, c => c.toUpperCase());
+const money = n => n == null ? "—" : "$" + Math.round(n).toLocaleString("en-US");
+
+/* ---------- scoring (edit weights here) ---------- */
+const W = { fund:30, exec:25, acq:18, hok90:20, hok:14, obs:15, hire:12, init:10, prog:8 };
+const KIND = { fund:"Funding", exec:"New exec", acq:"Acquisition", hok:"Power user", obs:"Obs. mention", hire:"Hiring", init:"Initiative", prog:"Program" };
+const decay = d => d <= 30 ? 1 : d <= 60 ? .7 : d <= 90 ? .45 : d <= 180 ? .2 : 0;
+
+function scoreSignals(a){
+  const why = []; let s = 0; const seen = {};
+  for (const [d, k, txt] of a.psa){
+    const age = ago(d), f = decay(age); if (!f) continue;
+    const key = k === "hok" && /90th\+/.test(txt) ? "hok90" : k;
+    const rep = seen[k] ? .5 : 1; seen[k] = 1;
+    const pts = W[key] * f * rep; s += pts;
+    why.push([pts, `${KIND[k]} · ${age}d ago`]);
+  }
+  const db = a.db;
+  if (db){
+    let p = 0;
+    if (db.em) p += Math.min(15, db.em / 6);
+    p += db.ntr * 4;
+    p += Math.min(10, db.tpv / 4);
+    p = Math.min(25, p);
+    if (p >= 1){ s += p; why.push([p, `Demandbase: ${db.em ? Math.round(db.em) + " engagement min" : "no engagement"}, ${db.tpv} page views${db.ntr ? ", " + db.ntr + " trending" : ""}`]); }
+  }
+  s = Math.round(100 * (1 - Math.exp(-s / 35)));  /* soft cap: one fresh funding round ≈ 58, two strong signals ≈ 80 */
+  why.sort((x, y) => y[0] - x[0]);
+  const top = a.psa[0];
+  return { s, why: why.map(w => `${w[1]} (+${Math.round(w[0])})`), short: a.psa.length ? `${a.psa.length} PSA signal${a.psa.length > 1 ? "s" : ""}, latest ${KIND[top[1]].toLowerCase()} ${ago(top[0])}d ago` : (s ? "Demandbase activity only" : "No signals in 180 days") };
+}
+function outreachBucket(a){
+  const m = a.m, d = ago(m.ml);
+  if ((m.m14 || 0) >= 5) return { k:"sprint", s:100, l:"Sprinting now" };
+  if (d == null) return { k:"never", s:0, l:"Never touched" };
+  if (d <= 15) return { k:"15", s:80, l:"Touched ≤15d" };
+  if (d <= 30) return { k:"30", s:60, l:"15–30 days" };
+  if (d <= 45) return { k:"45", s:40, l:"30–45 days" };
+  if (d <= 60) return { k:"60", s:22, l:"45–60 days" };
+  return { k:"60p", s:8, l:"60+ days" };
+}
+function scoreOutreach(a){
+  const b = outreachBucket(a), m = a.m, d = ago(m.ml);
+  const why = [b.l + (d != null ? ` (last touch ${fmtD(m.ml)}, ${d}d ago)` : " in the last 24 months"),
+    `${m.m14 || 0} touches in 14d · ${m.m30 || 0} in 30d · ${m.m90 || 0} in 90d`];
+  if (m.cn) why.push(`${m.cn} live connects/meetings set in 12 mo`);
+  if (m.rp) why.push(`${m.rp} email replies in 12 mo`);
+  if (m.al && m.al !== m.ml) why.push(`Someone else on the team touched it ${fmtD(m.al)}`);
+  return { s:b.s, why, short: b.l + (d != null ? ` · last ${d}d ago` : "") };
+}
+function meetingsOf(a){
+  const past = a.mtg.filter(x => x[3] !== "rescheduled" && ago(x[0]) >= 0 && ago(x[0]) <= 365);
+  const up = a.mtg.filter(x => ago(x[0]) < 0);
+  return { past, up };
+}
+function scoreMeetings(a){
+  const { past, up } = meetingsOf(a), n = past.length;
+  let s = n === 0 ? (up.length ? 30 : 0) : n === 1 ? 35 : n === 2 ? 50 : n <= 4 ? 65 : n <= 7 ? 78 : 88;
+  const why = [`${n} meeting${n === 1 ? "" : "s"} held in the last 12 months`];
+  if (n && up.length){ s += 12; }
+  if (up.length) why.push(`Next on calendar: ${fmtD(up[up.length - 1][0])}`);
+  if (n && ago(past[0][0]) <= 30){ s += 8; why.push(`Last meeting ${ago(past[0][0])}d ago`); }
+  else if (n) why.push(`Last meeting ${fmtD(past[0][0])}`);
+  s = Math.min(100, s);
+  return { s, why, short: n ? `${n} held${up.length ? " · 1 upcoming" : ""} · last ${fmtD(past[0][0])}` : (up.length ? "First meeting scheduled" : "No meetings in 12 mo") };
+}
+
+/* color ramp: cold blue → muted mid → hot red */
+const STOPS = [[0,[43,95,217]],[25,[79,143,232]],[50,[158,152,173]],[75,[240,138,75]],[100,[229,67,47]]];
+function color(s){
+  for (let i = 1; i < STOPS.length; i++){
+    if (s <= STOPS[i][0]){ const [a0, c0] = STOPS[i-1], [a1, c1] = STOPS[i]; const t = (s - a0) / (a1 - a0);
+      const c = c0.map((v, j) => Math.round(v + (c1[j] - v) * t)); return { css:`rgb(${c})`, light: (c[0]*.299 + c[1]*.587 + c[2]*.114) < 140 }; }
+  }
+  return { css:"rgb(229,67,47)", light:true };
+}
+
+/* ---------- overview: one score from everything, adjusted for how recently the account was hit ---------- */
+const FRESH = { sprint:[.55,"sprinting now"], "15":[.7,"touched in the last 15 days"], "30":[.85,"touched 15–30 days ago"], "45":[1,"touched 30–45 days ago"], "60":[1.08,"rested 45–60 days"], "60p":[1.15,"rested 60+ days"], never:[1.1,"never touched"] };
+function scoreOverview(a, sc, b){
+  const why = [], L = (a.leads || []);
+  const sig = sc.signals.s, meet = sc.meetings.s;
+  const recent = L.filter(l => !l.conv && ago(l.cd) != null && ago(l.cd) <= 90).length;
+  const mk = L.filter(l => l.limd && ago(l.limd) <= 30).length;
+  const engL = L.filter(l => (l.rp || 0) + (l.cn || 0) + (l.ck || 0) > 0 && ago(l.lt || l.la || l.cd) <= 180).length;
+  const trials = L.filter(l => (l.trial || l.ia) && ago(l.limd || l.cd) != null && ago(l.limd || l.cd) <= 90).length;
+  const inbound = Math.min(100, recent * 25 + mk * 18 + engL * 15 + trials * 30);
+  const m = a.m || {}, eng = Math.min(100, (m.rp || 0) * 15 + (m.cn || 0) * 20);
+  const opp = (a.opps || []).some(o => !/closed/.test(o.sg || "")) ? 10 : 0;
+  const raw = .5 * sig + .2 * inbound + .15 * meet + .15 * eng + opp;
+  const f = FRESH[b.k] || [1, ""];
+  const s = Math.max(0, Math.min(100, Math.round(raw * f[0] * 1.15)));
+  if (sig) why.push(`Signals ${sig}: ${sc.signals.short} (+${Math.round(.5 * sig)})`);
+  if (inbound) why.push(`Inbound: ${recent ? recent + " open lead" + (recent > 1 ? "s" : "") + " in 90d" : ""}${recent && (mk || engL) ? ", " : ""}${mk ? mk + " with marketing activity in 30d" : ""}${mk && engL ? ", " : ""}${engL ? engL + " engaged" : ""}${trials ? ` · ${trials} trial${trials > 1 ? "s" : ""} or in-app user${trials > 1 ? "s" : ""}` : ""} (+${Math.round(.2 * inbound)})`);
+  if (eng) why.push(`${m.rp || 0} replies and ${m.cn || 0} connects in 12 mo (+${Math.round(.15 * eng)})`);
+  if (meet) why.push(`Meetings: ${sc.meetings.short} (+${Math.round(.15 * meet)})`);
+  if (opp) why.push("Open opportunity (+10)");
+  why.push(`Outreach: ${f[1]} (×${f[0]})`);
+  const top = sig >= 45 ? "strong signals" : inbound >= 40 ? "inbound interest" : meet >= 50 ? "relationship" : "";
+  const short = s >= 70 ? `Top target${top ? ": " + top : ""}, ${f[1]}` : s >= 45 ? `Worth a look · ${f[1]}` : s >= 25 ? `Lukewarm · ${f[1]}` : `Low priority · ${f[1]}`;
+  return { s, why, short };
+}
+
+/* ---------- model ---------- */
+const STATUS = { "paying customer":"Paying customer", "churned customer":"Churned customer", "prospect":"Prospect" };
+let ACC = [];
+function buildACC(){
+ACC = DATA.accounts.map(a => {
+  const sc = { signals: scoreSignals(a), outreach: scoreOutreach(a), meetings: scoreMeetings(a) };
+  const b = outreachBucket(a);
+  sc.overview = scoreOverview(a, sc, b);
+  const openOpp = a.opps.find(o => !/closed/.test(o.sg));
+  const met = new Set(); a.mtg.forEach(x => (x[4] || "").split("; ").forEach(n => n && met.add(n.replace(/\s*\(.*$/, "").trim())));
+  const hay = [a.n, a.ind, a.dom, a.loc, ...a.ppl.map(p => p[0] + " " + p[1]), ...(a.leads || []).map(l => (l.name || "") + " " + (l.title || "")), ...met].join(" ").toLowerCase();
+  return { ...a, sc, bucket:b, openOpp, met, hay };
+});
+}
+
+const GROUPS = {
+  status:{ order:["Paying customer","Churned customer","Prospect"], of:a => STATUS[a.st] || cap(a.st) },
+  bucket:{ order:["Sprinting now","Touched ≤15d","15–30 days","30–45 days","45–60 days","60+ days","Never touched"], of:a => a.bucket.l },
+  opp:{ order:["Open opportunity","No open opportunity"], of:a => a.openOpp ? "Open opportunity" : "No open opportunity" },
+  size:{ order:["1–10 employees","11–50","51–200","201–1,000","1,000+","Unknown"], of:a => { const e = a.emp; return e == null ? "Unknown" : e <= 10 ? "1–10 employees" : e <= 50 ? "11–50" : e <= 200 ? "51–200" : e <= 1000 ? "201–1,000" : "1,000+"; } },
+  none:{ order:["All accounts"], of:() => "All accounts" }
+};
+
+/* ---------- state ---------- */
+const store = { get(k, d){ try { return localStorage.getItem("pm." + k) ?? d; } catch(e){ return d; } }, set(k, v){ try { localStorage.setItem("pm." + k, v); } catch(e){} } };
+const S = { fill: store.get("fill", "signals"), group: store.get("group", "status"), size: store.get("size", "s"), q:"", sel:null, tab:"overview" };
+
+/* ---------- render map ---------- */
+const $ = id => document.getElementById(id);
+const mapEl = $("map");
+function setMeta(){
+$("meta").textContent = DATA ? `${cap(DATA.owner)} · ${ACC.length} accounts · demo data generated ${new Date(DATA.loadedAt).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}` : "Pick a rep and load their patch";
+$("foot").innerHTML = `Demo build with made-up data. In the real tool every field is pulled live from the CRM, task and meeting history, intent data and tech-stack enrichment, and nothing is stored on the page.`;
+}
+$("wList").innerHTML = Object.entries({fund:"Funding round", exec:"New exec / VP+ / Director+ hire", acq:"Acquisition", hok90:"Power user joined (90th+ pct)", hok:"Power user joined (50–90th pct)", obs:"First observability mention in a job post", hire:"SWE / DevOps headcount growth", init:"Corporate initiative (cloud cost, migration…)", prog:"Strategic program alert"}).map(([k,v]) => `<li>${v}: ${W[k]}</li>`).join("");
+
+function visible(a){ return !S.q || a.hay.includes(S.q); }
+
+function hexPts(cx, cy, r){ const p = []; for (let i = 0; i < 6; i++){ const t = Math.PI / 180 * (60 * i - 30); p.push((cx + r * Math.cos(t)).toFixed(1) + "," + (cy + r * Math.sin(t)).toFixed(1)); } return p.join(" "); }
+
+function render(){
+  if (!ACC.length){ renderEmpty(); return; }
+  try { renderOrphans(); } catch(e){}
+  document.querySelectorAll("#fillSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.fill === S.fill));
+  document.querySelectorAll("#sizeSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.size === S.size));
+  $("groupSel").value = S.group;
+  const G = GROUPS[S.group], buckets = new Map(G.order.map(k => [k, []]));
+  ACC.forEach(a => { const k = G.of(a); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(a); });
+  mapEl.innerHTML = "";
+  const shown = [...buckets].filter(([, l]) => l.length);
+  const big = Math.max(...shown.map(([, l]) => l.length));
+  for (const [name, list] of shown){
+    list.sort((x, y) => y.sc[S.fill].s - x.sc[S.fill].s || x.n.localeCompare(y.n));
+    const vis = list.filter(visible);
+    const avg = Math.round(list.reduce((t, a) => t + a.sc[S.fill].s, 0) / list.length);
+    const g = document.createElement("section"); g.className = "group" + (list.length >= 20 || (list.length === big && shown.length <= 3 && list.length > 8) ? " wide" : "");
+    g.innerHTML = `<div class="ghead"><div class="gname">${esc(name)}<small>${list.length} account${list.length > 1 ? "s" : ""}${S.q ? ` · ${vis.length} match` : ""}</small></div><div class="gstat">avg <span class="mono">${avg}</span> <span class="dot" style="display:inline-block;background:${color(avg).css}"></span></div></div><div class="hexwrap"></div>`;
+    mapEl.appendChild(g);
+    g._list = list;
+  }
+  layoutAll(); summary();
+}
+function layoutAll(){
+  mapEl.querySelectorAll(".group").forEach(g => {
+    const wrap = g.querySelector(".hexwrap"), list = g._list, W0 = wrap.clientWidth || 300;
+    const r = S.size === "l" ? 40 : 21, gap = S.size === "l" ? 7 : prioGap();
+    const hw = Math.sqrt(3) * r, sx = hw + gap, sy = 1.5 * r + gap * .87;
+    const cols = Math.max(1, Math.floor((W0 - hw / 2 - 2) / sx));
+    const rows = Math.ceil(list.length / cols);
+    const H = (rows - 1) * sy + 2 * r + 4;
+    let s = `<svg class="hex" viewBox="0 0 ${W0} ${H}" height="${H}" role="list">`;
+    list.forEach((a, i) => {
+      const row = Math.floor(i / cols), col = i % cols;
+      const cx = hw / 2 + 1 + col * sx + (row % 2 ? sx / 2 : 0), cy = r + 2 + row * sy;
+      const sc = a.sc[S.fill], c = color(sc.s);
+      const label = S.size === "l" ? `<text x="${cx}" y="${cy + 3}" text-anchor="middle" class="${c.light ? "light" : ""}">${esc(a.n.length > 12 ? a.n.slice(0, 11) + "…" : a.n)}</text>` : "";
+      s += `<g role="listitem" tabindex="0" data-id="${a.id}" class="${visible(a) ? "" : "dim"}${S.sel === a.id ? " sel" : ""}" aria-label="${esc(a.n)}, ${S.fill} score ${sc.s}">${prioRing(a, cx, cy, r)}<polygon points="${hexPts(cx, cy, r)}" fill="${c.css}"></polygon>${label}</g>`;
+    });
+    wrap.innerHTML = s + "</svg>";
+  });
+}
+function summary(){
+  const counts = {}; ACC.forEach(a => { const k = STATUS[a.st]; counts[k] = (counts[k] || 0) + 1; });
+  const hot = ACC.filter(a => a.sc[S.fill].s >= 70).length, cold = ACC.filter(a => a.sc[S.fill].s < 25).length;
+  const stale = ACC.filter(a => ["60p","never"].includes(a.bucket.k)).length;
+  const sig30 = ACC.filter(a => a.psa.some(p => ago(p[0]) <= 30)).length;
+  const label = { overview:"overview", signals:"signals", outreach:"outreach", meetings:"meetings" }[S.fill];
+  $("summary").innerHTML = [
+    ...Object.entries(counts).map(([k, v]) => `<span class="chip"><b class="mono">${v}</b>${esc(k.toLowerCase())}</span>`),
+    `<span class="chip"><span class="dot" style="background:var(--hot)"></span><b class="mono">${hot}</b>hot on ${label} (70+)</span>`,
+    `<span class="chip"><span class="dot" style="background:var(--cold)"></span><b class="mono">${cold}</b>cold (&lt;25)</span>`,
+    `<span class="chip"><b class="mono">${sig30}</b>with a PSA signal in the last 30d</span>`,
+    `<span class="chip"><b class="mono">${stale}</b>untouched 60+ days</span>`
+  , ...prioChips()].join("");
+}
+
+/* ---------- tooltip ---------- */
+const tip = $("tip");
+mapEl.addEventListener("pointermove", e => {
+  const g = e.target.closest("g[data-id]"); if (!g){ tip.hidden = true; return; }
+  const a = ACC.find(x => x.id === g.dataset.id), sc = a.sc[S.fill];
+  tip.innerHTML = `<div class="t1" style="text-transform:capitalize">${esc(a.n)}</div><div class="t2">${esc(STATUS[a.st])} · ${S.fill} <span class="mono">${sc.s}</span></div><div class="t2">${esc(sc.short)}</div>${prioTip(a)}`;
+  tip.hidden = false;
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+});
+mapEl.addEventListener("pointerleave", () => tip.hidden = true);
+mapEl.addEventListener("click", e => { const g = e.target.closest("g[data-id]"); if (g) openPanel(g.dataset.id); });
+mapEl.addEventListener("keydown", e => { const g = e.target.closest("g[data-id]"); if (g && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); openPanel(g.dataset.id); } });
+
+/* ---------- side panel ---------- */
+const TABS = [["overview","Overview"],["signals","Signals"],["activity","Activity"],["people","People"],["history","History"],["leads","Leads"],["research","News & files"]];
+function openPanel(id){
+  S.sel = id; S.tab = S.tab || "overview"; tip.hidden = true;
+  const a = ACC.find(x => x.id === id);
+  $("sName").textContent = a.n;
+  const sfUrl = `#demo-record/Account/${a.id}/view`;
+  const stCls = a.st.split(" ")[0];
+  $("sSub").innerHTML = `<span class="pill ${stCls === "paying" ? "paying" : stCls === "churned" ? "churned" : "prospect"}">${esc(STATUS[a.st])}</span>${a.tier ? `<span>Tier ${esc(a.tier)}</span>` : ""}<span>${esc(cap(a.ind || "industry unknown"))}</span>${a.emp ? `<span class="mono">${a.emp} emp</span>` : ""}<span>${esc(cap(a.loc || ""))}</span>${prioPill(a)}`;
+  $("sGauges").innerHTML = [["overview","Overview"],["signals","Signals"],["outreach","My outreach"],["meetings","Meetings"]].map(([k, l]) => { const sc = a.sc[k]; return `<button type="button" class="gauge" data-fill="${k}" aria-pressed="${S.fill === k}"><div class="k">${l}</div><div class="v"><span class="sw" style="background:${color(sc.s).css}"></span><span class="n">${sc.s}</span></div><div class="d" title="${esc(sc.short)}">${esc(sc.short)}</div></button>`; }).join("");
+  const counts = { signals:a.psa.length, activity:a.tch.length + a.mtg.length, people:a.ppl.length, history:a.opps.length, leads:(a.leads || []).filter(l => !l.conv).length };
+  $("sTabs").innerHTML = TABS.map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${l}${counts[k] ? `<span class="ct">${counts[k]}</span>` : ""}</button>`).join("");
+  renderTab(a, sfUrl);
+  const side = $("side"); side.classList.add("open"); side.setAttribute("aria-hidden", "false"); $("scrim").hidden = false;
+  mapEl.querySelectorAll("g.sel").forEach(g => g.classList.remove("sel"));
+  const g = mapEl.querySelector(`g[data-id="${id}"]`); if (g) g.classList.add("sel");
+}
+function closePanel(){ const side = $("side"); side.classList.remove("open"); side.setAttribute("aria-hidden", "true"); $("scrim").hidden = true; S.sel = null; mapEl.querySelectorAll("g.sel").forEach(g => g.classList.remove("sel")); }
+$("closeBtn").onclick = closePanel; $("scrim").onclick = closePanel;
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+$("sTabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (!b) return; S.tab = b.dataset.tab; openPanel(S.sel); });
+$("sGauges").addEventListener("click", e => { const b = e.target.closest("button[data-fill]"); if (!b) return; S.fill = b.dataset.fill; store.set("fill", S.fill); render(); openPanel(S.sel); });
+
+function renderTab(a, sfUrl){
+  const B = $("sBody"); B.scrollTop = 0;
+  const t = S.tab;
+  if (t === "leads"){ renderLeadsTab(a, B); return; }
+  if (t === "cosell"){ if (window.__cosell) window.__cosell.render(a, B); else B.innerHTML = "<div class=callout>Co-sell isn't available.</div>"; return; }
+  if (t === "docs"){ renderDocsTab(a, B); return; }
+  if (t === "overview"){
+    const i = a.ily;
+    B.innerHTML = `
+      <div class="links"><a class="btn" href="${sfUrl}" target="_blank" rel="noopener">Open in Salesforce ↗</a>${a.dom ? `<a class="btn" href="https://${esc(a.dom)}" target="_blank" rel="noopener">${esc(a.dom)} ↗</a>` : ""}</div>
+      ${prioEditor(a)}${orgsHtml(a)}<div class="sec" style="margin-top:16px"><h3>Why it's colored this way</h3><div class="why">${[["signals","Signals"],["outreach","My outreach"],["meetings","Meetings (12 mo)"]].map(([k, l]) => `<div class="w"><div class="wh"><span>${l}</span><span class="mono" style="color:${color(a.sc[k].s).css}">${a.sc[k].s}</span></div><ul>${(a.sc[k].why.length ? a.sc[k].why : ["Nothing in the window"]).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`).join("")}</div></div>
+      <div class="sec"><h3>Account</h3><dl class="kv">
+        <dt>Status</dt><dd>${esc(STATUS[a.st])}${a.fcw ? ` · first closed-won ${fmtD(a.fcw)}` : ""}</dd>
+        <dt>Industry</dt><dd>${esc(cap(a.ind || "—"))}</dd>
+        <dt>Employees</dt><dd class="mono">${a.emp ?? "—"}</dd>
+        <dt>Location</dt><dd>${esc(cap(a.loc || "—"))}</dd>
+        ${a.mrr ? `<dt>Family MRR</dt><dd class="mono">${money(a.mrr)}</dd>` : ""}
+        ${a.vc ? `<dt>Investor</dt><dd>${esc(cap(a.vc))}</dd>` : ""}
+        ${a.openOpp ? `<dt>Open opp</dt><dd>${esc(a.openOpp.nm)} · ${esc(a.openOpp.sg)} · close ${fmtD(a.openOpp.cl)}</dd>` : ""}
+        ${i && i.cloud ? `<dt>Primary hosting</dt><dd>${esc(i.cloud)}</dd>` : ""}
+        ${i && i.tier ? `<dt>IT spend tier</dt><dd>${esc(i.tier.replace(/^[A-G]\)\s*/, ""))}/mo est.</dd>` : ""}
+      </dl></div>
+      <div class="sec"><h3>Rep notes${a.nd ? ` · edited ${fmtD(a.nd)}` : ""}</h3>${a.notes ? `<div class="notes">${esc(a.notes)}</div>` : `<div class="callout">No rep notes in Salesforce yet. Anything you add to the Rep Notes field will show up here on the next refresh.</div>`}</div>
+      ${a.desc ? `<div class="sec"><h3>Company description</h3><p style="margin:0;color:var(--fg-2)">${esc(a.desc)}</p></div>` : ""}`;
+  }
+  if (t === "signals"){
+    const db = a.db, i = a.ily;
+    B.innerHTML = `
+      <div class="sec"><h3>Priority signals (PSA, last 180 days)</h3>${a.psa.length ? `<div class="list">${a.psa.map(([d, k, txt, url]) => `<div class="item"><div class="ih"><div class="ib" style="margin:0;color:var(--fg)"><span class="tag ${k}">${KIND[k]}</span>${esc(txt)}</div><span class="id">${fmtD(d)}</span></div>${url ? `<div class="ib"><a href="${esc(url)}" target="_blank" rel="noopener">Source ↗</a></div>` : ""}</div>`).join("")}</div>` : `<div class="callout">No PSA alerts on this account in the last 180 days.</div>`}</div>
+      <div class="sec"><h3>Demandbase · as of ${fmtD(DATA.dbAsOf)}</h3>${db ? `
+        <div class="stats"><div class="stat"><div class="sv">${db.em != null ? Math.round(db.em) : "—"}</div><div class="sk">engagement minutes</div></div><div class="stat"><div class="sv">${db.nkw}</div><div class="sk">intent keywords</div></div><div class="stat"><div class="sv">${db.ntr}</div><div class="sk">trending</div></div><div class="stat"><div class="sv">${db.tpv}</div><div class="sk">datadog.com page views (90d)</div></div></div>
+        ${db.kw.length ? `<div style="margin-top:10px" class="chips">${db.kw.map(k => `<span class="kchip ${k.endsWith("*") ? "tr" : ""}">${esc(k.replace("*", ""))}${k.endsWith("*") ? " ↑" : ""}</span>`).join("")}</div>` : ""}
+        ${db.pg.length ? `<div class="list" style="margin-top:10px">${db.pg.map(([p, v]) => `<div class="item"><div class="ih"><span class="ib mono" style="margin:0">${esc(p)}</span><span class="id">${v} view${v > 1 ? "s" : ""}</span></div></div>`).join("")}</div>` : ""}
+        ${ago(DATA.dbAsOf) > 21 ? `<div class="note">The Demandbase feed in Snowflake last updated ${fmtD(DATA.dbAsOf)}, so treat this as directional.</div>` : ""}` : `<div class="callout">No Demandbase match for ${esc(a.dom || "this domain")}.</div>`}</div>
+      <div class="sec"><h3>Tech footprint (Intricately)</h3>${i ? `<dl class="kv">
+        <dt>Primary hosting</dt><dd>${esc(i.cloud || "—")}</dd><dt>IT spend tier</dt><dd>${esc((i.tier || "—").replace(/^[A-G]\)\s*/, ""))}</dd>
+        <dt>Cloud spend est.</dt><dd class="mono">${i.spend != null ? money(i.spend) + "/mo" : "—"}</dd>
+        ${i.elastic ? `<dt>Elasticsearch</dt><dd class="mono">${money(i.elastic)}/mo</dd>` : ""}${i.k8s ? `<dt>Kubernetes</dt><dd class="mono">${money(i.k8s)}/mo</dd>` : ""}
+        ${i.traffic != null ? `<dt>Web traffic YoY</dt><dd class="mono">${i.traffic > 0 ? "+" : ""}${i.traffic}%</dd>` : ""}</dl>` : `<div class="callout">No Intricately enrichment for this account.</div>`}</div>`;
+  }
+  if (t === "activity"){
+    const m = a.m, { past, up } = meetingsOf(a);
+    B.innerHTML = `
+      <div class="sec"><h3>My outreach</h3><div class="stats">
+        <div class="stat"><div class="sv">${m.ml ? ago(m.ml) + "d" : "—"}</div><div class="sk">since last touch</div></div>
+        <div class="stat"><div class="sv">${m.m14 || 0}</div><div class="sk">touches, 14d</div></div>
+        <div class="stat"><div class="sv">${m.m90 || 0}</div><div class="sk">touches, 90d</div></div>
+        <div class="stat"><div class="sv">${m.cn || 0}</div><div class="sk">connects, 12 mo</div></div>
+        <div class="stat"><div class="sv">${m.rp || 0}</div><div class="sk">replies, 12 mo</div></div></div></div>
+      <div class="sec"><h3>Recent touches</h3>${a.tch.length ? `<div class="list">${a.tch.map(([d, ty, who, subj]) => `<div class="item"><div class="ih"><span class="it" style="text-transform:none">${esc(ty.replace("/", " · "))}</span><span class="id">${fmtD(d)}</span></div><div class="ib" style="text-transform:capitalize">${esc(who || "—")}</div>${subj ? `<div class="ib">${esc(subj)}</div>` : ""}</div>`).join("")}</div>` : `<div class="callout">No touches from you in the last 120 days.</div>`}</div>
+      <div class="sec"><h3>Meetings · last 12 months</h3>${a.mtg.length ? `<div class="list">${a.mtg.map(([d, subj, ty, st, who]) => `<div class="item ${ago(d) < 0 ? "up" : ""}"><div class="ih"><span class="it" style="text-transform:none">${esc(subj)}</span><span class="id">${ago(d) < 0 ? "upcoming · " : ""}${fmtD(d)}</span></div><div class="ib">${esc(cap(ty || "meeting"))} · ${esc(st)}</div>${who ? `<div class="ib" style="text-transform:capitalize">${esc(who)}</div>` : ""}</div>`).join("")}</div><div class="note">${past.length} held${up.length ? `, ${up.length} upcoming` : ""}. Many past events still show "scheduled" in Salesforce; they're counted as held.</div>` : `<div class="callout">No meetings logged on this account in the last 12 months.</div>`}</div>`;
+  }
+  if (t === "people"){
+    const metList = [...a.met];
+    B.innerHTML = `
+      <div class="sec"><h3>Who we've met (12 mo)</h3>${metList.length ? `<div class="chips">${metList.map(n => `<span class="kchip" style="text-transform:capitalize">${esc(n)}</span>`).join("")}</div>` : `<div class="callout">No meeting attendees logged yet.</div>`}</div>
+      <div class="sec"><h3>Target personas</h3>${a.ppl.length ? `<div class="list">${a.ppl.map(([n, title, la]) => `<div class="item"><div class="ih"><span class="it">${esc(n)}${a.met.has(n) ? `<span class="met">Met</span>` : ""}</span><span class="id">${la ? "active " + fmtD(la) : "no activity"}</span></div><div class="ib" style="text-transform:capitalize">${esc(title)}</div></div>`).join("")}</div><div class="note">Ranked from Salesforce contacts: CTO / VP Eng / platform, SRE and DevOps titles first, then director, staff and founder roles.</div>` : `<div class="callout">No contacts with titles in Salesforce for this account.</div>`}</div>`;
+  }
+  if (t === "people" && window.__org){ try { window.__org.mount(a, B); } catch(e){ console.error("[org]", e); } }
+  if (t === "history"){
+    B.innerHTML = `<div class="sec"><h3>Opportunities & past investigations</h3>${a.opps.length ? `<div class="list">${a.opps.map(o => `<div class="item ${!/closed/.test(o.sg) ? "up" : ""}"><div class="ih"><span class="it" style="text-transform:none">${esc(o.nm)}</span><span class="id">${fmtD(o.cd)}</span></div>
+      <div class="ib"><b style="color:var(--fg)">${esc(cap(o.sg))}</b> · close ${fmtD(o.cl)}${o.mrr ? ` · <span class="mono">${money(o.mrr)}</span> MRR` : ""}${o.pc ? ` · vs ${esc(o.pc)}` : ""}</div>
+      ${o.dr || o.dn ? `<div class="ib"><b>Conclusion:</b> ${esc(cap(o.dr || ""))}${o.dr && o.dn ? " — " : ""}${esc(o.dn || "")}</div>` : ""}
+      ${o.pain ? `<div class="ib"><b>Pain:</b> ${esc(o.pain)}</div>` : ""}${o.ns ? `<div class="ib"><b>Last next step:</b> ${esc(o.ns)}</div>` : ""}</div>`).join("")}</div>` : `<div class="callout">No opportunities created on this account in the last 4 years.</div>`}</div>`;
+  }
+  if (t === "research"){
+    const q = encodeURIComponent(`"${a.n.replace(/\s*\(.*\)/, "")}"`);
+    B.innerHTML = `
+      <div class="sec"><h3>Recent news (last 30 days)</h3><div class="callout">News isn't pulled into the map yet. Until it is, this opens a news search limited to the past month.<div class="links"><a class="btn" href="https://news.google.com/search?q=${q}%20when%3A30d" target="_blank" rel="noopener">Search news ↗</a><a class="btn" href="https://www.linkedin.com/search/results/content/?keywords=${q}&datePosted=%22past-month%22" target="_blank" rel="noopener">LinkedIn posts ↗</a></div></div></div>
+      <div class="sec"><h3>Call transcripts & account research</h3><div class="callout">Not connected yet. Until then, search your Drive for anything filed under this account, or keep research in the Salesforce Rep Notes field (it shows on the Overview tab).<div class="links"><a class="btn" href="#demo-drive/drive/search?q=${q}" target="_blank" rel="noopener">Search Drive ↗</a><a class="btn" href="${sfUrl}" target="_blank" rel="noopener">Rep Notes in Salesforce ↗</a></div></div></div>`;
+  }
+}
+
+/* ---------- controls ---------- */
+$("fillSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S.fill = b.dataset.fill; store.set("fill", S.fill); render(); if (S.sel) openPanel(S.sel); });
+$("sizeSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S.size = b.dataset.size; store.set("size", S.size); render(); });
+$("groupSel").addEventListener("change", e => { S.group = e.target.value; store.set("group", S.group); render(); });
+$("q").addEventListener("input", e => { S.q = e.target.value.trim().toLowerCase(); render(); });
+$("howBtn").addEventListener("click", e => { const s = $("scoring"); s.hidden = !s.hidden; e.currentTarget.setAttribute("aria-expanded", !s.hidden); });
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layoutAll, 120); });
+if (!GROUPS[S.group]) S.group = "status";
+if (!["overview","signals","outreach","meetings"].includes(S.fill)) S.fill = "overview";
+
+/* ---------- live loading (each viewer's own Snowflake connector) ---------- */
+const CFG = {"name": "Jordan Rivera", "email": "demo@example.com", "driveRoot": null, "outreachAnyone": false, "orgUrl": "", "priority": true, "roster": [["Jordan Rivera (demo)", "demo@example.com"]]};
+const ROSTER = CFG.roster || [[CFG.name, CFG.email]];
+const repKeyOf = e => String(e || "").toLowerCase().replace(/[^a-z0-9]+/g, "_");
+const PRIO_DOC = () => CFG.team ? `priority/${repKeyOf(currentEmail())}` : "priority/mine";
+const SERVER = "Snowflake", TOOL = "sql_exec_tool";
+const SECTIONS = { accounts:"accounts", metrics:"outreach", psa:"signals", meetings:"meetings", personas:"contacts", opps:"opportunities", demandbase:"Demandbase", intricately:"tech stack", touches:"recent touches", leads:"leads", orphans:"leads outside your patch", psapub:"signal dates", leadspub:"leads & trials (marketing table)", meetpub:"meeting dates", orgs:"orgs" };
+const LEAD_BATCH = 20, ORPHAN_PAGE = 80;
+const EMAIL_RE = /^[a-z0-9._%+-]+@example\.com$/;
+let LOADING = false;
+
+const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+const cacheKey = e => "cache3." + e;
+function readCache(e){ try { const s = store.get(cacheKey(e), null); return s ? JSON.parse(s) : null; } catch(err){ return null; } }
+function writeCache(e, d){ try { localStorage.setItem("pm." + cacheKey(e), JSON.stringify(d)); } catch(err){} }
+
+function setStatus(msg, kind){ const el = $("loadStatus"); el.textContent = msg || ""; el.dataset.kind = kind || ""; }
+
+/* Snowflake's TO_JSON writes SQL NULLs inside arrays as a bare `undefined`, which isn't valid JSON. */
+const fixJson = s => s.replace(/([\[,])\s*undefined(?=\s*[,\]])/g, "$1null");
+function payloadValue(res){
+  let p = res && typeof res === "object" && "payload" in res ? res.payload : res;
+  const soft = v => { if (typeof v !== "string") return v; try { return JSON.parse(v); } catch(e){ return v; } };
+  p = soft(p);
+  if (p && p.structuredContent) p = p.structuredContent;
+  if (p && Array.isArray(p.content)) p = soft(p.content.map(c => c && c.text || "").join(""));
+  p = soft(p);
+  const cell = p && p.result_set && p.result_set.data && p.result_set.data[0] ? p.result_set.data[0][0] : undefined;
+  if (cell === undefined){ const err = new Error(typeof p === "string" ? p.slice(0, 300) : "Snowflake returned an unexpected response."); err.code = "bad_shape"; throw err; }
+  if (cell == null) return null;
+  if (typeof cell !== "string") return cell;
+  try { return JSON.parse(fixJson(cell)); }
+  catch(e){ const err = new Error("Couldn't read the result (" + cell.length + " characters): " + e.message); err.code = "bad_json"; throw err; }
+}
+
+function psaKind(s){
+  s = (s || "").toLowerCase();
+  if (/fund/.test(s)) return "fund"; if (/acqui/.test(s)) return "acq";
+  if (/power user|economic buyer/.test(s)) return "hok";
+  if (/cio|cto|vp\+|director\+|exec|appointment/.test(s)) return "exec";
+  if (/observab/.test(s) && /mention/.test(s)) return "obs";
+  if (/headcount|hiring/.test(s)) return "hire";
+  if (/cost|migration|transformation|initiative|moderniz|security|ai\b/.test(s)) return "init";
+  return "prog";
+}
+function psaText(k, sub, x){
+  x = String(x || "").trim();
+  const url = ((x.match(/https?:\/\/[^\s)]+/) || [""])[0]).replace(/[),.;]+$/, "");
+  if (k === "fund"){
+    const d = x.match(/funding date:\s*([a-z]+ \d+, \d{4})/i), r = x.match(/funding round:\s*([\w-]+)/i), a = x.match(/funding amount:\s*usd\s*([\d.,]+)\s*(million|billion)?/i);
+    const round = r ? r[1].replace(/_/g, " ").replace(/series unknown/i, "round unknown") : "";
+    return [`Funding: ${a ? "$" + a[1] + (a[2] ? (a[2][0].toLowerCase() === "b" ? "B" : "M") : "") : "amount unknown"}${round ? " · " + round : ""}${d ? " · " + cap(d[1]) : ""}`, ""];
+  }
+  let t = x.replace(/^\d+\.\s*/, "")
+    .replace(/hok tracking alert:.*?prospects!/i, "").replace(/new exec stakeholder alert:.*?account!/i, "")
+    .replace(/corporate initiative alert:.*?past 7 days:/i, "").replace(/new hiring trend alert:.*?prospect has had an/i, "")
+    .replace(/acquisition alert:.*?company!/i, "").replace(/first time observability mention alert:.*?below:/i, "")
+    .replace(/https?:\/\/\S+/g, "").replace(/linkedin url:|url:/gi, "")
+    .replace(/(hok|exec) name:\s*/gi, "").replace(/\s*(new )?job title:\s*/gi, " — ")
+    .replace(/company acquired:\s*(.*?)\s*acquired on:\s*([\d-]+)/i, "$1 ($2)")
+    .replace(/\ba\.\s+/, "").replace(/\s\b[b-d]\.\s+/g, " · ").replace(/\s+:/g, ":").replace(/\s+/g, " ").replace(/[\s:–-]+$/, "").trim();
+  const pre = { hok: /90th\+/.test(sub) ? "Power user (90th+ pct) joined: " : /economic buyer/.test(sub) && !/power/.test(sub) ? "Economic buyer change: " : "Power user (50–90th pct) joined: ",
+    exec:"New exec: ", init:"Initiative: ", hire:"Headcount: ", acq:"Acquired: ", obs:"First observability mention in a job post: ", prog: cap(sub) + ": " }[k] || "";
+  return [(pre + (t || cap(sub))).slice(0, 280), url];
+}
+const clean = s => String(s || "").replace(/<[^>]*>?/g, " ").replace(/&(amp|quot|#39|gt|lt|nbsp);/g, m => ({ "&amp;":"&", "&quot;":'"', "&#39;":"'", "&gt;":">", "&lt;":"<", "&nbsp;":" " }[m])).replace(/\s+/g, " ").trim();
+
+/* lead row → object */
+const LEAD_KEYS = ["id","name","title","email","status","conv","how","owned","cd","la","lim","limd","src","n","mine","lt","rp","op","ck","cn","trial","lg","apm","ia","fa","rej"];
+const ORPH_KEYS = ["id","name","title","email","co","dom","status","cd","la","lim","limd","src","free","n","mine","lt","rp","op","ck","cn"];
+const toObj = (keys, r) => { const o = {}; keys.forEach((k, i) => o[k] = r[i] == null ? null : r[i]); o.lim = o.lim ? clean(o.lim) : null; if (/^00g/i.test(o.status || "")) o.status = "in queue"; return o; };
+
+function engage(l){
+  if (l.rp > 0) return { k:"replied", l:"Replied", s:100 };
+  if (l.cn > 0) return { k:"connected", l:"Connected", s:90 };
+  if (l.ck > 0) return { k:"clicked", l:"Clicked", s:75 };
+  if (l.op > 0) return { k:"opened", l:"Opened", s:55 };
+  if (l.n > 0) return { k:"touched", l:"No response yet", s:25 };
+  return { k:"none", l:"Not touched", s:0 };
+}
+
+/* Restricted leads have names and outreach history; marketing leads are visible on anyone's accounts and carry trials. Keep the richer row, add trial flags. */
+function mergeLeads(R, P){
+  const by = new Map(R.map(l => [l.id, l]));
+  P.forEach(p => { const r = by.get(p.id); if (r){ r.trial = p.trial; r.lg = p.lg; r.apm = p.apm; r.ia = p.ia; r.rej = p.rej; if (!r.title) r.title = p.title; if ((p.trial || p.ia) && !r.limd) { r.lim = p.lim; r.limd = p.limd; } } else { p.pub = 1; by.set(p.id, p); } });
+  return [...by.values()];
+}
+function assemble(email, me, r){
+  const rows = r.accounts || [];
+  const db = (r.demandbase && r.demandbase.rows) || {};
+  const pick = (o, i) => (o && typeof o === "object" && o[i]) || null;
+  const pubPsa = r.psapub || {}, pubMtg = r.meetpub || {};
+  DATA = { v:3, visible: r.__visible, asOf: todayStr(), loadedAt: Date.now(), dbAsOf: r.demandbase && r.demandbase.asOf, owner: me.name || email, email, diag: r.__diag,
+    orphans: (r.orphans || []).map(x => toObj(ORPH_KEYS, x)),
+    accounts: rows.map(a => {
+      const i = a.id, d = pick(db, i);
+      return { ...a, m: pick(r.metrics, i) || {},
+        psa: (pick(r.psa, i) || []).length ? pick(r.psa, i).map(([dt, s, x]) => { const k = psaKind(s); const [txt, url] = psaText(k, s || "", x); return [dt, k, txt, url]; })
+             : (pubPsa[i] || []).map(dt => [dt, "prog", "PSA alert (details visible to the account owner in Salesforce)", ""]),
+        mtg: (pick(r.meetings, i) || []).length ? pick(r.meetings, i) : (pubMtg[i] || []).map(([dt, st]) => [dt, "Meeting (details not visible to you)", null, st || "scheduled", null]),
+        ppl: pick(r.personas, i) || [], orgs: pick(r.orgs, i) || [],
+        opps: (pick(r.opps, i) || []).map(o => ({ ...o, pain: o.pain ? clean(o.pain) : null, dn: o.dn ? clean(o.dn) : null, ns: o.ns ? clean(o.ns) : null })),
+        db: d ? { ...d, kw: d.kw || [], pg: d.pg || [] } : null, ily: pick(r.intricately, i), tch: pick(r.touches, i) || [],
+        leads: mergeLeads((pick(r.leads, i) || []).map(x => toObj(LEAD_KEYS, x)), ((pick(r.leadspub, i) || {}).l || []).map(x => toObj(LEAD_KEYS, x))), lc: { n: (pick(r.leadspub, i) || {}).n || 0, nt: (pick(r.leadspub, i) || {}).nt || 0 } };
+    }).sort((x, y) => x.n.localeCompare(y.n)) };
+  if (CFG.outreachAnyone) DATA.accounts.forEach(a => { const m = a.m; m.ml = m.al; m.m14 = m.a14; m.m30 = m.a30; m.m90 = m.a90; });
+  if (CFG.triage){ DATA.heavy = DATA.accounts.filter(HEAVY); DATA.accounts = DATA.accounts.filter(a => !HEAVY(a)); }
+}
+
+function applySumble(){
+  if (!DATA || !window.__sumble) return;
+  DATA.accounts.forEach(a => { if (!a._psa0) a._psa0 = (a.psa || []).slice(); a.psa = a._psa0.concat(window.__sumble.forAccount(a)).sort((x, y) => String(y[0]).localeCompare(String(x[0]))); });
+}
+if (window.__sumble) window.__sumble.on(() => { if (DATA){ applySumble(); buildACC(); render(); if (S.sel) openPanel(S.sel); } const el = $("sumbleStatus"); if (el) el.textContent = window.__sumble.status || (window.__sumble.signals.length ? `Sumble: ${window.__sumble.signals.length} saved signals` : ""); });
+function show(d){
+  DATA = d; ASOF = new Date(DATA.asOf + "T12:00:00"); applySumble(); buildACC(); setMeta(); closePanel(); render(); renderDiag();
+  if (CFG.triage) triLoad().then(triRender); triRender();
+  const lim = DATA.visible != null && DATA.visible < DATA.accounts.length;
+  $("limBanner").hidden = !lim;
+  if (lim) $("limBanner").textContent = `Full detail is available on ${DATA.visible} of ${DATA.accounts.length} accounts. Snowflake shows rep notes, opportunities, contacts and meeting details only to the account owner and the people above them, so the rest show public fields. Open this page signed in as ${cap(DATA.owner)} for the full view.`;
+  $("csvBtn").hidden = false;
+}
+
+function friendly(e){
+  const c = e && (e.code || e.name) || "";
+  if (/server_not_connected|not_connected|not_found|unknown_server/.test(c)) return "Your Claude account doesn't have the Snowflake connector connected. Add it under Settings → Connectors in Claude, then reload this page.";
+  if (/not_granted|denied|consent|permission/.test(c)) return "Snowflake access wasn't allowed for this page. Use the page's Permissions menu to allow the Snowflake connector, then load again.";
+  if (/rate/.test(c)) return "Snowflake is rate-limiting requests right now. Wait a minute and load again.";
+  if (/timeout/.test(c)) return "Snowflake took too long to answer. Try loading again.";
+  const m = (e && e.message) || String(e);
+  if (/insufficient privileges|does not exist or not authorized/i.test(m)) return "Your Snowflake role can't read the data tables this page uses. Ask for the same Snowflake access the sales analytics team uses, then try again.";
+  return m.slice(0, 240);
+}
+
+async function load(){
+  if (LOADING) return;
+  const email = currentEmail();
+  if (!EMAIL_RE.test(email)){ setStatus("Enter an email.", "err"); $("emailIn").focus(); return; }
+  LOADING = true; $("loadBtn").disabled = true; setStatus("Loading…");
+  const diag = {};
+  try {
+    const mcp = window.claude && window.claude.use ? await window.claude.use("mcp") : null;
+    if (!mcp){ setStatus("This view can't reach your connectors. Open the page on claude.ai while signed in, and make sure the Snowflake connector is connected.", "err"); return; }
+    const run = async sql => payloadValue(await mcp.callTool(SERVER, TOOL, { sql }));
+    const patch = await run(SQL_PATCH(email));
+    if (!patch || !patch.me){ setStatus(`No Salesforce user found for ${email}.`, "err"); return; }
+    const list = patch.rows || [];
+    if (!list.length){ setStatus(`No accounts came back for ${email}.`, "err"); return; }
+    const uid = patch.me.id;
+    const all = { ids: list.map(r => r[0]), doms: list.map(r => r[1] || ""), names: list.map(r => r[2] || "") };
+    const out = { __diag: diag };
+    const jobs = [];
+    ["accounts","metrics","psa","meetings","personas","opps","demandbase","intricately","touches","psapub","meetpub","orgs"].forEach(k => jobs.push({ k, sql: SQL_BATCH(k, uid, all), merge: v => out[k] = v }));
+    for (let i = 0; i < all.ids.length; i += LEAD_BATCH){
+      const b = { ids: all.ids.slice(i, i + LEAD_BATCH), doms: all.doms.slice(i, i + LEAD_BATCH), names: all.names.slice(i, i + LEAD_BATCH) };
+      jobs.push({ k:"leads", sql: SQL_BATCH("leads", uid, b), merge: v => out.leads = Object.assign(out.leads || {}, v || {}) });
+      jobs.push({ k:"leadspub", sql: SQL_BATCH("leadspub", uid, b), merge: v => out.leadspub = Object.assign(out.leadspub || {}, v || {}) });
+    }
+    if (!CFG.leadsInOnly) jobs.push({ k:"orphans", page:0 });
+    let done = 0; const total = () => jobs.length;
+    const queue = jobs.slice();
+    const doJob = async j => {
+      try {
+        if (j.k === "orphans"){
+          out.orphans = out.orphans || [];
+          for (let p = 0; p < 10; p++){
+            const rows = await run(SQL_ORPHAN_LEADS(uid, p, ORPHAN_PAGE)) || [];
+            out.orphans.push(...rows);
+            if (rows.length < ORPHAN_PAGE) break;
+          }
+        } else j.merge(await run(j.sql));
+        diag[j.k] = diag[j.k] && diag[j.k].err ? diag[j.k] : { ok:true };
+      } catch(e){
+        diag[j.k] = { err: friendly(e) };
+        if (j.k === "accounts") throw e;
+      }
+      done++; setStatus(`Loaded ${done} of ${total()} pieces…`);
+    };
+    const worker = async () => { while (queue.length) await doJob(queue.shift()); };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    out.__visible = patch.visible; assemble(email, patch.me, out); writeCache(email, DATA); show(DATA);
+    if (window.__sumble) window.__sumble.sync();
+    const bad = Object.entries(diag).filter(([, v]) => v.err).map(([k]) => SECTIONS[k]);
+    setStatus(bad.length ? `Loaded ${DATA.accounts.length} accounts, but ${bad.join(", ")} didn't load. Open Load details for the reason.` : `Loaded ${DATA.accounts.length} accounts just now.`, bad.length ? "err" : "ok");
+  } catch(e){
+    setStatus("Couldn't load from Snowflake: " + friendly(e), "err");
+  } finally { LOADING = false; $("loadBtn").disabled = false; syncLoadBtn(); }
+}
+
+function renderDiag(){
+  const el = $("diag"); if (!DATA){ el.hidden = true; return; }
+  const A = DATA.accounts, has = f => A.filter(f).length;
+  const rows = [
+    ["accounts", `${A.length} accounts`],
+    ["metrics", `${has(a => a.m && a.m.ml)} with your outreach logged`],
+    ["psa", `${has(a => a.psa.length)} with PSA signals`],
+    ["meetings", `${has(a => a.mtg.length)} with meetings`],
+    ["personas", `${has(a => a.ppl.length)} with contacts`],
+    ["opps", `${has(a => a.opps.length)} with opportunities`],
+    ["leads", `${A.reduce((t, a) => t + a.leads.length, 0)} leads on ${has(a => a.leads.length)} accounts`],
+    ["leadspub", `${A.reduce((t, a) => t + a.leads.filter(l => l.trial || l.ia).length, 0)} trials or in-app users on ${has(a => a.leads.some(l => l.trial || l.ia))} accounts`],
+    ...(CFG.leadsInOnly ? [] : [["orphans", `${(DATA.orphans || []).length} leads outside your patch`]]),
+    ["demandbase", `${has(a => a.db)} with Demandbase data`],
+    ["intricately", `${has(a => a.ily)} with tech stack data`],
+    ["touches", `${has(a => a.tch.length)} with recent touches`]];
+  const d = DATA.diag || {};
+  el.hidden = false;
+  el.innerHTML = `<summary>Load details</summary><ul>${rows.map(([k, t]) => `<li class="${d[k] && d[k].err ? "bad" : ""}"><b>${esc(cap(SECTIONS[k]))}</b>: ${d[k] && d[k].err ? esc(d[k].err) : esc(t)}</li>`).join("")}</ul>`;
+}
+
+function currentEmail(){
+  const v = $("repSel").value;
+  return (v === "__other" ? $("emailIn").value : v).trim().toLowerCase();
+}
+function syncLoadBtn(){
+  const e = currentEmail();
+  $("loadBtn").textContent = DATA && DATA.email === e ? "Refresh" : "Load patch";
+  $("emailWrap").hidden = $("repSel").value !== "__other";
+}
+function selectEmail(e){
+  const inRoster = ROSTER.some(r => r[1] === e);
+  $("repSel").value = inRoster ? e : (e ? "__other" : "");
+  if (!inRoster && e) $("emailIn").value = e;
+  const c = e ? readCache(e) : null;
+  if (c){ show(c); setStatus(`Showing data loaded ${new Date(c.loadedAt).toLocaleString("en-US", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" })}. Refresh for the latest.`); }
+  else { DATA = null; ACC = []; setMeta(); closePanel(); render(); renderDiag(); setStatus(e ? "Press Load patch to pull this patch from Snowflake." : ""); }
+  syncLoadBtn();
+  window.__hubRep = e ? { email: e, key: CFG.team ? repKeyOf(e) : "mine", name: (ROSTER.find(r => r[1] === e) || [cap(e.split("@")[0].replace(/[._]/g, " "))])[0] } : null;
+  if (CFG.team){ PRIO = {}; if (typeof prioLoad === "function" && CFG.priority) prioLoad(); try { window.dispatchEvent(new Event("hubrep")); } catch(err){} }
+}
+
+function renderEmpty(){
+  $("summary").innerHTML = ""; $("orphans").hidden = true;
+  mapEl.innerHTML = `<section class="group wide onboard">
+    <h2>See your patch as a host map</h2>
+    <ol>
+      <li>Pick your name above, or choose <b>Someone else</b> and type your Datadog email.</li>
+      <li>Press <b>Load patch</b>. The first time, Claude asks you to let this page use your Snowflake connector. Allow it.</li>
+      <li>Click any hexagon for that account's signals, outreach, meetings, people, leads and past opportunities.</li>
+    </ol>
+    <p class="note">You need the Snowflake connector connected in your own Claude account. Queries run with your access, so you'll see full detail for the accounts you own. Your data stays in your browser and isn't shared with anyone else who opens this link.</p>
+  </section>`;
+}
+
+/* ---------- leads tab ---------- */
+const sfLead = id => `#demo-record/Lead/${id}/view`;
+function leadItem(l, showCo){
+  const e = engage(l);
+  const mk = l.limd && ago(l.limd) <= 90 ? `<span class="tag prog">Marketing ${ago(l.limd)}d ago</span>` : "";
+  const tri = l.trial ? `<span class="tag late">Trial${l.limd ? " " + fmtD(l.limd) : ""}${l.lg ? ` · ${l.lg} logins` : ""}${l.apm ? ` · ${l.apm} APM hosts` : ""}</span>` : l.ia ? `<span class="tag late">Added in app</span>` : "";
+  return `<div class="item lead ${l.conv ? "conv" : ""}"><div class="ih"><span class="it"><a href="${sfLead(l.id)}" target="_blank" rel="noopener">${esc(l.name || "(no name)")}</a></span><span class="eng ${e.k}">${e.l}</span></div>
+    <div class="links" style="margin-top:4px"><a class="btn sm" href="${sfLead(l.id)}" target="_blank" rel="noopener">Open lead in Salesforce ↗</a></div>
+    <div class="ib" style="text-transform:capitalize">${esc(l.title || "no title")}${showCo && l.co ? ` · ${esc(l.co)}` : ""}</div>
+    <div class="ib">${l.conv ? `<span class="tag">Converted</span>` : `<span class="tag">${esc(cap(l.status || "open"))}</span>`}${tri}${mk}<span class="mono">${l.n || 0}</span> touch${l.n === 1 ? "" : "es"}${l.n ? ` (${l.mine || 0} yours) · last ${fmtD(l.lt)}` : ""}${l.op ? ` · ${l.op} opened` : ""}${l.ck ? ` · ${l.ck} clicked` : ""}${l.rp ? ` · ${l.rp} replied` : ""}${l.cn ? ` · ${l.cn} connects` : ""}</div>
+    <div class="ib"><span class="mono sel">${esc(l.email || "")}</span>${l.how && l.how !== "sfdc" ? ` · matched by ${l.how === "domain" ? "email domain" : "company name"}` : ""}${l.cd ? ` · created ${fmtD(l.cd)}` : ""}${l.src ? ` · ${esc(l.src)}` : ""}</div>${l.pub ? `<div class="note">From the marketing lead table. Touch counts come from public task data; email opens and clicks are visible only to the account owner and their managers.</div>` : ""}</div>`;
+}
+const leadSort = (x, y) => engage(y).s - engage(x).s || String(y.lt || y.la || y.cd || "").localeCompare(String(x.lt || x.la || x.cd || ""));
+function renderLeadsTab(a, B){
+  const L = (a.leads || []).slice().sort(leadSort), open = L.filter(l => !l.conv), conv = L.filter(l => l.conv);
+  const known = new Set(L.map(l => String(l.id || "").slice(0, 15)).concat(L.map(l => String(l.email || "").toLowerCase())));
+  const dom = String(a.dom || "").toLowerCase();
+  const fresh = (window.__leadFlows ? window.__leadFlows() : []).filter(f => f && dom && String(f.email || "").toLowerCase().endsWith("@" + dom) && !known.has(String(f.lid || "").slice(0, 15)) && !known.has(String(f.email || "").toLowerCase()));
+  const cnt = f => open.filter(f).length;
+  const freshHtml = fresh.length ? `<div class="sec"><h3>Just assigned to you</h3><div class="list">${fresh.map(f => `<div class="item lead"><div class="ih"><span class="it"><a href="${sfLead(f.lid)}" target="_blank" rel="noopener">${esc(f.name || "(no name)")}</a></span><span class="tag prog">assigned ${fmtD(f.date)}</span></div><div class="ib">${esc(f.momentLabel || "")}</div><div class="ib"><span class="mono sel">${esc(f.email || "")}</span></div></div>`).join("")}</div><div class="note">From Salesforce's lead-assignment emails. Salesforce data reaches Snowflake about a day later, so these show up above after that.</div></div>` : "";
+  if (!L.length && !fresh.length){ B.innerHTML = `<div class="callout">No leads found for this account. Leads are matched by the account link in Salesforce, the email domain (${esc(a.dom || "none")}) and the company name.</div>`; return; }
+  B.innerHTML = freshHtml + (L.length ? `
+    <div class="sec"><h3>Lead summary</h3><div class="stats">
+      <div class="stat"><div class="sv">${L.length}</div><div class="sk">leads in total</div></div>
+      <div class="stat"><div class="sv">${open.length}</div><div class="sk">still open</div></div>
+      <div class="stat"><div class="sv">${conv.length}</div><div class="sk">converted to contacts</div></div>
+      <div class="stat"><div class="sv">${cnt(l => l.rp > 0 || l.cn > 0 || l.ck > 0)}</div><div class="sk">open + engaged</div></div>
+      <div class="stat"><div class="sv">${cnt(l => !l.n)}</div><div class="sk">open + never touched</div></div></div></div>
+    ${open.length ? `<div class="sec"><h3>Open leads (${open.length})</h3><div class="list">${open.map(l => leadItem(l)).join("")}</div></div>` : ""}
+    ${conv.length ? `<div class="sec"><h3>Converted leads (${conv.length})</h3>${!open.length ? `<div class="note" style="margin-bottom:8px">Every lead here has been converted to a contact, so their newer emails, calls and replies are logged on the contact. See the People tab.</div>` : ""}<div class="list">${conv.map(l => leadItem(l)).join("")}</div></div>` : ""}
+    <div class="note">Touches count every logged email, call and LinkedIn task on the lead by anyone. Engagement comes from email opens, clicks and replies tracked on those tasks, plus call connects.</div>` : "");
+}
+
+/* ---------- leads outside the patch (below the map) ---------- */
+let ORPH = { sort:"engaged", only:false, inP: store.get("leadsIn", "1") === "1", outP: store.get("leadsOut", "1") === "1" };
+function renderOrphans(){
+  const box = $("orphans"), O = (DATA && DATA.orphans) || [];
+  if (!DATA){ box.hidden = true; return; }
+  box.hidden = false;
+  if (CFG.leadsInOnly){ ORPH.inP = true; ORPH.outP = false; }
+  const q = S.q;
+  const groups = [];
+  if (ORPH.inP) ACC.forEach(a => { const open = (a.leads || []).filter(l => !l.conv); if (open.length) groups.push({ key:"in:" + a.id, where:"in", acct:a.id, co:a.n, dom:a.dom, leads:open.slice() }); });
+  if (ORPH.outP){ const m = new Map(); O.forEach(l => { const key = l.free || !l.dom ? "@" + (l.co || l.email || l.id) : l.dom; if (!m.has(key)) m.set(key, { key:"out:" + key, where:"out", co:l.co, dom:l.free ? null : l.dom, leads:[] }); m.get(key).leads.push(l); }); groups.push(...m.values()); }
+  let G = groups.map(g => { g.leads.sort(leadSort); g.best = engage(g.leads[0]); g.touches = g.leads.reduce((t, l) => t + (l.n || 0), 0); g.last = g.leads.map(l => l.lt || l.la || l.cd || "").sort().pop(); return g; });
+  if (q) G = G.filter(g => [g.co, g.dom, ...g.leads.map(l => (l.name || "") + " " + (l.title || ""))].join(" ").toLowerCase().includes(q));
+  if (ORPH.only) G = G.filter(g => g.best.s >= 55);
+  const sorters = { engaged:(x, y) => y.best.s - x.best.s || String(y.last).localeCompare(String(x.last)), recent:(x, y) => String(y.last).localeCompare(String(x.last)), name:(x, y) => String(x.co || x.dom).localeCompare(String(y.co || y.dom)) };
+  G.sort(sorters[ORPH.sort]);
+  const inLeads = ACC.reduce((t, a) => t + (a.leads || []).filter(l => !l.conv).length, 0), inAccts = ACC.filter(a => (a.leads || []).some(l => !l.conv)).length;
+  const outCos = new Set(O.map(l => l.free || !l.dom ? "@" + (l.co || l.email) : l.dom)).size;
+  const shownLeads = G.reduce((t, g) => t + g.leads.length, 0), engagedN = G.reduce((t, g) => t + g.leads.filter(l => engage(l).s >= 55).length, 0), untouched = G.reduce((t, g) => t + g.leads.filter(l => !l.n).length, 0);
+  box.innerHTML = `<div class="ohead"><div><h2>${CFG.leadsInOnly ? "Leads at these accounts" : "Leads"}</h2><p class="note" style="margin:2px 0 0">Showing <b class="mono">${shownLeads}</b> open leads in <b class="mono">${G.length}</b> groups · <b class="mono">${engagedN}</b> engaged or opened · <b class="mono">${untouched}</b> never touched.</p>
+      ${CFG.leadsInOnly ? "" : `<div class="ltog" role="group" aria-label="Which leads to show">
+        <label class="chk"><input type="checkbox" id="lIn"${ORPH.inP ? " checked" : ""}> At accounts in my patch <span class="mono">(${inLeads} on ${inAccts})</span></label>
+        <label class="chk"><input type="checkbox" id="lOut"${ORPH.outP ? " checked" : ""}> Mine, outside my patch <span class="mono">(${O.length} at ${outCos} companies)</span></label>
+      </div>`}</div>
+    <div class="ctl"><label for="oSort">Sort</label><select id="oSort"><option value="engaged">Most engaged</option><option value="recent">Most recent activity</option><option value="name">Company A–Z</option></select>
+    <label class="chk"><input type="checkbox" id="oOnly"${ORPH.only ? " checked" : ""}> Engaged or opened only</label></div></div>
+    ${!ORPH.inP && !ORPH.outP ? `<div class="callout">Tick one or both boxes to see leads.</div>` : G.length ? `<div class="orows">${G.map(g => `<details class="orow"><summary><span class="dot" style="background:${color(g.best.s).css}"></span><span class="oco">${esc(g.co || g.dom || "Unknown company")}${g.dom ? `<small>${esc(g.dom)}</small>` : ""}${ORPH.inP && ORPH.outP ? `<span class="wtag ${g.where}">${g.where === "in" ? "In patch" : "Outside"}</span>` : ""}</span><span class="mono onum">${g.leads.length} lead${g.leads.length > 1 ? "s" : ""}</span><span class="eng ${g.best.k}">${g.best.l}</span><span class="mono onum">${g.touches} touches</span><span class="mono odate">${g.last ? fmtD(g.last) : "—"}</span></summary>
+      ${g.acct ? `<div class="links" style="padding:0 10px 6px"><button type="button" class="btn sm" data-open-acct="${esc(g.acct)}">Open account panel</button><a class="btn sm" href="#demo-record/Account/${esc(g.acct)}/view" target="_blank" rel="noopener">Account in Salesforce ↗</a></div>` : ""}
+      <div class="list">${g.leads.map(l => leadItem(l)).join("")}</div></details>`).join("")}</div>` : `<div class="callout">No leads match the current filters.</div>`}`;
+  $("oSort").value = ORPH.sort;
+  $("oSort").onchange = e => { ORPH.sort = e.target.value; renderOrphans(); };
+  $("oOnly").onchange = e => { ORPH.only = e.target.checked; renderOrphans(); };
+  if (!CFG.leadsInOnly) $("lIn").onchange = e => { ORPH.inP = e.target.checked; store.set("leadsIn", ORPH.inP ? "1" : "0"); renderOrphans(); };
+  if (!CFG.leadsInOnly) $("lOut").onchange = e => { ORPH.outP = e.target.checked; store.set("leadsOut", ORPH.outP ? "1" : "0"); renderOrphans(); };
+  box.querySelectorAll("[data-open-acct]").forEach(b => b.onclick = () => { S.tab = "leads"; openPanel(b.dataset.openAcct); });
+}
+
+/* rep picker */
+$("repSel").innerHTML = (CFG.team ? `<option value="">Choose your name…</option>` : "") + ROSTER.map(([n, e]) => `<option value="${esc(e)}">${esc(n)}</option>`).join("") + (CFG.team ? `<option value="__other">Someone else…</option>` : "");
+$("repSel").addEventListener("change", () => { const v = $("repSel").value; if (v === "__other"){ syncLoadBtn(); $("emailIn").focus(); return; } store.set("email", v); selectEmail(v); });
+$("emailIn").addEventListener("input", syncLoadBtn);
+$("emailIn").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); load(); } });
+$("emailIn").addEventListener("change", () => { const e = currentEmail(); if (EMAIL_RE.test(e)){ store.set("email", e); const c = readCache(e); if (c) selectEmail(e); } });
+$("loadBtn").addEventListener("click", load);
+
+if (!GROUPS[S.group]) S.group = "status";
+if (!["signals","outreach","meetings"].includes(S.fill)) S.fill = "signals";
+
+/* ---------- orgs (paying customers) ---------- */
+const sfRec = id => `#demo-record/${id}/view`;
+function orgsHtml(a){
+  if (!a.orgs || !a.orgs.length) return "";
+  const cust = /paying|customer/.test(a.st);
+  return `<div class="sec"><h3>Datadog org${a.orgs.length > 1 ? "s" : ""}${cust ? "" : " (not a paying customer)"}</h3><div class="list">${a.orgs.map(([id, nm, prim, plan, st, dis, ch, sub, master]) => `<div class="item"><div class="ih"><span class="it">${esc(nm || "org")}</span><span class="id">${prim ? "primary" : ""}${master ? (prim ? " · " : "") + "parent org" : ""}</span></div>
+    <div class="ib">Org ID <span class="mono sel">${esc(id)}</span>${plan ? ` · ${esc(cap(plan))} plan` : ""}${st ? ` · ${esc(st)}` : ""}${dis ? " · disabled" : ""}${ch ? " · churned" : ""}</div>
+    <div class="links"><button type="button" class="btn sm" data-copy="${esc(id)}">Copy org ID</button>${sub ? `<a class="btn sm" href="${sfRec(sub)}" target="_blank" rel="noopener">Org record in Salesforce ↗</a>` : ""}${CFG.orgUrl ? `<a class="btn sm" href="${esc(CFG.orgUrl.replace("{org}", id))}" target="_blank" rel="noopener">Open org ↗</a>` : ""}</div></div>`).join("")}</div></div>`;
+}
+ROOT_EL.addEventListener("click", e => { const b = e.target.closest("[data-copy]"); if (!b) return; const v = b.dataset.copy;
+  const done = () => { const t = b.textContent; b.textContent = "Copied"; setTimeout(() => b.textContent = t, 1200); };
+  try { navigator.clipboard.writeText(v).then(done, () => { b.textContent = v; }); } catch(err){ b.textContent = v; } });
+
+/* ---------- Drive docs ---------- */
+const DOCS = {};
+const mcpJson = res => { let p = res && typeof res === "object" && "payload" in res ? res.payload : res;
+  const soft = v => { if (typeof v !== "string") return v; try { return JSON.parse(v); } catch(e){ return v; } };
+  p = soft(p); if (p && p.structuredContent) p = p.structuredContent; if (p && Array.isArray(p.content)) p = soft(p.content.map(c => c && c.text || "").join("")); return soft(p); };
+const dq = s => String(s).replace(/\\/g, "").replace(/'/g, "\\'");
+async function findDocs(a){
+  if (DOCS[a.id]) return DOCS[a.id];
+  const mcp = window.claude && window.claude.use ? await window.claude.use("mcp") : null;
+  if (!mcp) throw Object.assign(new Error("Connectors aren't available in this view."), { code:"no_mcp" });
+  const term = a.n.replace(/\s*\(.*?\)\s*/g, " ").replace(/[,.]?\s+(inc|llc|ltd|corp|co)\.?$/i, "").trim();
+  const search = async q => (mcpJson(await mcp.callTool("Google Drive", "search_files", { query: q, excludeContentSnippets: true, pageSize: 30 })) || {}).files || [];
+  const top = await search(`parentId = '${CFG.driveRoot}' and title contains '${dq(term)}'`);
+  let files = top.filter(f => !/folder/.test(f.mimeType));
+  for (const f of top.filter(f => /folder/.test(f.mimeType)).slice(0, 3)) files = files.concat((await search(`parentId = '${f.id}'`)).map(x => ({ ...x, folder: f.title })));
+  files.sort((x, y) => String(y.modifiedTime).localeCompare(String(x.modifiedTime)));
+  return DOCS[a.id] = files;
+}
+function renderDocsTab(a, B){
+  const folder = `#demo-drive/drive/folders/${CFG.driveRoot}`;
+  B.innerHTML = `<div class="sec"><h3>Account docs in Claude Resources</h3><div class="note">Looking for files and folders named like “${esc(a.n)}”…</div></div>`;
+  findDocs(a).then(files => {
+    if (S.sel !== a.id || S.tab !== "docs") return;
+    B.innerHTML = `<div class="sec"><h3>Account docs in Claude Resources</h3>${files.length ? `<div class="list">${files.map(f => `<div class="item"><div class="ih"><span class="it" style="text-transform:none">${esc(f.title)}</span><span class="id">${fmtD(String(f.modifiedTime || "").slice(0, 10))}</span></div>
+      <div class="ib">${f.folder ? `in ${esc(f.folder)} · ` : ""}${esc(String(f.mimeType || "").replace("application/vnd.google-apps.", ""))}</div>
+      <div class="links"><a class="btn sm" href="${esc(f.viewUrl || "#demo-drive/open?id=" + f.id)}" target="_blank" rel="noopener">Open ↗</a>${/document|presentation|spreadsheet|pdf|word/.test(f.mimeType || "") ? `<button type="button" class="btn sm" data-preview="${esc(f.id)}">Preview</button>` : ""}</div><div class="pv" id="pv-${esc(f.id)}"></div></div>`).join("")}</div>`
+      : `<div class="callout">No docs found for this account yet. Add a folder or doc to Claude Resources with the account's name in the title (for example “${esc(a.n)} – call notes”) and it will show up here.</div>`}
+      <div class="links"><a class="btn" href="${folder}" target="_blank" rel="noopener">Open Claude Resources ↗</a></div></div>`;
+  }).catch(e => { if (S.tab === "docs") B.innerHTML = `<div class="callout">Couldn't search Drive: ${esc(friendly(e))}<br>This tab uses your Google Drive connector; allow it for this page when Claude asks.<div class="links"><a class="btn" href="${folder}" target="_blank" rel="noopener">Open Claude Resources ↗</a></div></div>`; });
+}
+ROOT_EL.addEventListener("click", async e => {
+  const b = e.target.closest("[data-preview]"); if (!b) return;
+  const id = b.dataset.preview, box = document.getElementById("pv-" + id); if (!box) return;
+  if (box.dataset.loaded){ box.hidden = !box.hidden; return; }
+  b.disabled = true; box.innerHTML = `<div class="note">Loading…</div>`;
+  try {
+    const mcp = await window.claude.use("mcp");
+    const r = mcpJson(await mcp.callTool("Google Drive", "read_file_content", { fileId: id }));
+    const t = (r && (r.fileContent || r.content || r.text)) || (typeof r === "string" ? r : "");
+    box.innerHTML = `<div class="notes" style="max-height:360px;margin-top:8px">${esc(String(t).replace(/\n{3,}/g, "\n\n").slice(0, 8000))}${String(t).length > 8000 ? "\n…" : ""}</div>`; box.dataset.loaded = 1;
+  } catch(err){ box.innerHTML = `<div class="note">Couldn't open this file: ${esc(friendly(err))}</div>`; }
+  b.disabled = false;
+});
+
+/* ---------- CSV ---------- */
+function csvCell(v){ v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function buildCsv(){
+  const H = ["Account ID","Account","Status","Tier","Industry","Employees","Location","Domain","Signals score","Outreach score","Meetings score","Outreach bucket","Last touch","Touches 30d","Meetings held 12mo","Next meeting","PSA signals 180d","Latest signal","Open opportunity","Open leads","Engaged leads","Org IDs","Detail visible","Salesforce link"];
+  const rows = ACC.map(a => { const { past, up } = meetingsOf(a); const open = (a.leads || []).filter(l => !l.conv);
+    return [a.id, a.n, STATUS[a.st] || a.st, a.tier, a.ind, a.emp, a.loc, a.dom, a.sc.signals.s, a.sc.outreach.s, a.sc.meetings.s, a.bucket.l, a.m.ml, a.m.m30, past.length, up.length ? up[up.length - 1][0] : "", a.psa.length, a.psa[0] ? a.psa[0][2] : "", a.openOpp ? a.openOpp.nm + " (" + a.openOpp.sg + ")" : "", open.length, open.filter(l => engage(l).s >= 55).length, (a.orgs || []).map(o => o[0]).join(" "), a.vis === 0 ? "public only" : "full", `#demo-record/Account/${a.id}/view`]; });
+  return [H, ...rows].map(r => r.map(csvCell).join(",")).join("\n");
+}
+$("csvBtn").addEventListener("click", async () => {
+  if (!DATA) return;
+  const name = `${DATA.owner.replace(/\s+/g, "-")}-patch-${todayStr()}.csv`;
+  try {
+    const dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+    if (!dl){ setStatus("Downloads aren't available in this view.", "err"); return; }
+    await dl.save({ filename: name, data: buildCsv(), mimeType: "text/csv" });
+    setStatus(`Saved ${name}.`, "ok");
+  } catch(e){ setStatus(/declin|cancel|abort/i.test(String(e && (e.code || e.message))) ? "Download cancelled." : "Couldn't save the CSV: " + friendly(e), "err"); }
+});
+
+/* ---------- Path-to-number priority outlines (My patch only) ---------- */
+const PRIO_T = { 1:{ l:"Tier 1 · most likely to hit the number", c:"var(--p1)", w:3.5 }, 2:{ l:"Tier 2", c:"var(--p2)", w:3 }, 3:{ l:"Tier 3", c:"var(--p3)", w:2.5 }, 4:{ l:"Tier 4 · worth watching", c:"var(--p4)", w:2 } };
+let PRIO = {}, PRIO_V = null;
+function prioGap(){ return CFG.priority ? 8 : 3; }
+function prioOf(a){ return CFG.priority && a && PRIO[a.id] && PRIO_T[PRIO[a.id].t] ? PRIO[a.id] : null; }
+function prioRing(a, cx, cy, r){ const p = prioOf(a); if (!p) return ""; const T = PRIO_T[p.t]; return `<polygon class="pring t${p.t}" points="${hexPts(cx, cy, r + 3.2)}" style="stroke:${T.c};stroke-width:${T.w}"></polygon>`; }
+function prioTip(a){ const p = prioOf(a); return p ? `<div class="t2"><b style="color:${PRIO_T[p.t].c}">${esc(PRIO_T[p.t].l)}</b>${p.note ? ` · ${esc(p.note)}` : ""}</div>` : ""; }
+function prioPill(a){ const p = prioOf(a); return p ? `<span class="pill prio t${p.t}">Priority tier ${p.t}</span>` : ""; }
+function prioChips(){ if (!CFG.priority) return []; const n = { 1:0, 2:0, 3:0, 4:0 }; ACC.forEach(a => { const p = prioOf(a); if (p) n[p.t]++; });
+  return [1, 2, 3, 4].filter(t => n[t]).map(t => `<span class="chip"><span class="pdot t${t}"></span><b class="mono">${n[t]}</b>${t === 1 ? "tier 1 · path to number" : "tier " + t}</span>`); }
+function prioEditor(a){
+  if (!CFG.priority) return "";
+  const p = PRIO[a.id] || { t:0, note:"" };
+  return `<div class="sec prioed"><h3>Path to number</h3><div class="prow"><label for="prioSel">Priority</label><select id="prioSel" data-acct="${esc(a.id)}"><option value="0">Not a priority</option>${[1, 2, 3, 4].map(t => `<option value="${t}"${p.t == t ? " selected" : ""}>${esc(PRIO_T[t].l)}</option>`).join("")}</select></div>
+    <label for="prioNote" class="lbl" style="display:block;margin-top:8px">Why</label><textarea id="prioNote" rows="2" placeholder="e.g. meeting booked, SIEM eval, hypergrowth program">${esc(p.note || "")}</textarea>
+    <div class="links"><button type="button" class="btn sm primary" data-prio-save="${esc(a.id)}">Save priority</button><span class="note" id="prioMsg"></span></div></div>`;
+}
+async function prioLoad(){
+  if (!CFG.priority) return;
+  try { const db = await window.claude.use("db"); if (!db) return; const d = await db.doc(PRIO_DOC()).get(); const v = d && (typeof d.data === "function" ? d.data() : (d.data && typeof d.data === "object" ? d.data : d)); PRIO = (v && v.accounts) || {}; if (ACC.length){ render(); if (S.sel) openPanel(S.sel); } } catch(e){}
+}
+ROOT_EL.addEventListener("click", async e => {
+  const b = e.target.closest("[data-prio-save]"); if (!b) return;
+  const id = b.dataset.prioSave, t = +$("prioSel").value, note = $("prioNote").value.trim().slice(0, 240), msg = $("prioMsg");
+  const next = { ...PRIO }; if (t) next[id] = { t, note }; else delete next[id];
+  b.disabled = true; msg.textContent = "Saving…";
+  try { const db = await window.claude.use("db"); await db.doc(PRIO_DOC()).set({ accounts: next, updated: todayStr() }); PRIO = next; msg.textContent = "Saved."; render(); openPanel(id); }
+  catch(err){ msg.textContent = "Couldn't save: " + friendly(err); }
+  b.disabled = false;
+});
+if (CFG.priority){
+  window.__prio = () => PRIO;
+  GROUPS.prio = { order:["Tier 1 · path to number","Tier 2","Tier 3","Tier 4","Not prioritized"], of:a => { const p = prioOf(a); return p ? (p.t === 1 ? "Tier 1 · path to number" : "Tier " + p.t) : "Not prioritized"; } };
+  const sel = $("groupSel"); if (sel && !sel.querySelector('option[value="prio"]')){ const o = document.createElement("option"); o.value = "prio"; o.textContent = "Path to number"; sel.insertBefore(o, sel.firstChild); }
+  if (store.get("group", null) === null){ S.group = "prio"; }
+  prioLoad();
+}
+
+/* boot (keep last, after every declaration above) */
+setMeta();
+
+/* ---------- triage queue (shared-patch view): overlooked leads and re-engage plays; heavy-trial accounts filtered out ---------- */
+const HEAVY = a => !!a.lc && (a.lc.nt >= 5 || a.lc.n >= 10);
+const openLead = l => !l.conv && !l.rej && !/disqual|reject|junk|unqualif|bad data/i.test(l.status || "");
+const leadLine = l => `${l.name || l.email}${l.title ? " (" + l.title + ")" : ""}${l.trial ? ", trial" : l.ia ? ", added in app" : ""}, ${fmtD(l.cd)}`;
+function useCase(a){
+  const y = a.ily || {}, out = [];
+  if ((y.spend || 0) >= 5000) out.push(`${y.cloud || "Cloud"} ~$${Math.round(y.spend / 1000)}k/mo`);
+  const comp = [["nr","New Relic"],["dyn","Dynatrace"],["splunk","Splunk"],["elastic","Elastic"]].filter(([k]) => (y[k] || 0) > 0).map(([, n]) => n);
+  if (comp.length) out.push("pays for " + comp.join(", "));
+  if ((y.k8s || 0) > 0) out.push("Kubernetes");
+  const p90 = (a.psa || []).filter(p => ago(p[0]) != null && ago(p[0]) <= 90).length; if (p90) out.push(`${p90} PSA signal${p90 > 1 ? "s" : ""} in 90d`);
+  if (a.db && ((a.db.nkw || 0) > 0 || (a.db.em || 0) > 0)) out.push("Demandbase intent");
+  if ((y.traffic || 0) >= 25) out.push(`traffic +${y.traffic}% YoY`);
+  return out;
+}
+function triageOf(a){
+  const L = (a.leads || []).filter(openLead), al = a.m && a.m.al;
+  const fresh = L.filter(l => ago(l.cd) != null && ago(l.cd) <= 180 && !(l.n > 0) && (!al || String(al) < String(l.cd)));
+  if (fresh.length){
+    fresh.sort((x, y) => ((y.trial || y.ia) ? 1 : 0) - ((x.trial || x.ia) ? 1 : 0) || String(y.cd).localeCompare(String(x.cd)));
+    const uc = useCase(a);
+    return { group:"overlooked", score: 200 - Math.min(180, ago(fresh[0].cd)) + (fresh.some(l => l.trial || l.ia) ? 40 : 0) + uc.length * 8,
+      why: [`${fresh.length} untouched lead${fresh.length > 1 ? "s" : ""}: ${fresh.slice(0, 2).map(leadLine).join("; ")}${fresh.length > 2 ? ` +${fresh.length - 2} more` : ""}`, al ? `last account touch ${fmtD(al)}` : "account never worked", ...uc.slice(0, 2)] };
+  }
+  const all = (a.leads || []).filter(l => !l.rej), newest = all.map(l => l.cd).sort().pop();
+  if (!all.length || all.length > 4 || ago(newest) == null || ago(newest) <= 180) return null;
+  const warm = all.filter(l => l.trial || l.ia || (l.rp || 0) > 0 || (l.cn || 0) > 0 || l.limd);
+  const uc = useCase(a), k = a.bucket && a.bucket.k;
+  if (!warm.length || !uc.length || ["sprint","15","30","45"].includes(k)) return null;
+  return { group:"reengage", score: 60 + uc.length * 15 + warm.length * 5 - Math.min(40, Math.round(ago(newest) / 60)),
+    why: [uc.join(", "), `${all.length} old lead${all.length > 1 ? "s" : ""}: ${warm.slice(0, 2).map(leadLine).join("; ")}`, al ? `last touch ${fmtD(al)}` : "never worked"] };
+}
+let TRI = {}, TRQ = null;
+const TRI_KEY = () => repKeyOf(currentEmail() || CFG.email || "rep");
+const TRI_V = [{ k:"work", label:"Worth working", key:"w", tone:"good" }, { k:"later", label:"Not now", key:"n" }, { k:"no", label:"Not workable", key:"x", tone:"bad" }];
+async function triLoad(){ try { const db = await window.claude.use("db"); if (!db) return; const res = await db.collection("triage").get();
+  const docs = (Array.isArray(res) ? res : (res && (res.docs || res.items || res.documents)) || []).map(d => d && (typeof d.data === "function" ? d.data() : (d.data && typeof d.data === "object" ? d.data : d)));
+  const pre = TRI_KEY() + "-", next = {}; docs.forEach(m => { if (m && m.key && m.key.startsWith(pre) && m.d) next[m.id] = m; }); TRI = next; } catch(e){} }
+async function triSet(id, d){
+  const db = await window.claude.use("db"); if (!db) throw new Error("Saving isn't available in this view.");
+  const a = (ACC || []).find(x => x.id === id) || {}, key = TRI_KEY() + "-" + id;
+  const doc = { key, id, d: d || "", name: a.n || "", date: todayStr(), by: (window.__hubRep && window.__hubRep.name) || "" };
+  await db.doc(`triage/${key}`).set(doc); if (d) TRI[id] = doc; else delete TRI[id];
+}
+function triBox(){
+  let box = $("triage");
+  if (!box && mapEl && mapEl.parentNode){ box = document.createElement("section"); box.id = "triage"; box.className = "tq"; box.hidden = true; mapEl.parentNode.insertBefore(box, mapEl); }
+  return box;
+}
+function triRender(){
+  if (!CFG.triage || !window.__triage) return;
+  if (!TRQ) TRQ = window.__triage.create({
+    box: triBox, on: (t, f) => document.addEventListener(t, f),
+    title: `Worth a look in ${cap((DATA && DATA.owner) || "this patch")}`,
+    intro: "Leads nobody has touched yet, and accounts with a real use case and a few old warm leads. Accounts with 5+ trial leads or 10+ leads are left out: they're almost always a churned customer or a duplicate of one.",
+    groups: [{ k:"overlooked", label:"Overlooked leads", tone:"hot" }, { k:"reengage", label:"Re-engage", tone:"warm" }],
+    verdicts: TRI_V,
+    items: () => DATA ? ACC.map(a => { const t = triageOf(a); return t && { id:a.id, name:cap(a.n), sub:[a.dom, a.emp ? a.emp + " emp" : "", a.loc].filter(Boolean).join(" · "), group:t.group, why:t.why, score:t.score, chips:[STATUS[a.st] || cap(a.st)].filter(Boolean) }; }).filter(Boolean).sort((x, y) => (x.group === y.group ? 0 : x.group === "overlooked" ? -1 : 1) || y.score - x.score) : null,
+    mark: id => TRI[id], setMark: triSet,
+    open: id => { const t = triageOf(ACC.find(a => a.id === id) || {}); S.tab = t && t.group === "overlooked" ? "leads" : "overview"; openPanel(id); },
+    isOpen: () => $("side").classList.contains("open"),
+    skipped: () => { const H = (DATA && DATA.heavy) || []; return H.length ? `<details style="margin-top:10px"><summary class="note"><b>Left out: ${H.length} account${H.length > 1 ? "s" : ""} with 5+ trial leads or 10+ leads</b> (likely churned customer or duplicate)</summary><div class="orows" style="margin-top:6px">${H.map(a => `<div class="orow"><div class="dsum"><span class="oco">${esc(cap(a.n))}<small>${esc(a.dom || "")}</small></span><span class="note">${a.lc.nt} trial/in-app · ${a.lc.n} leads</span><a class="btn sm" href="#demo-record/Account/${a.id}/view" target="_blank" rel="noopener">Salesforce ↗</a></div></div>`).join("")}</div></details>` : ""; }
+  });
+  TRQ.render();
+}
+
+/* boot last, so everything above (incl. the triage queue) is defined before the cached patch renders */
+selectEmail(CFG.team ? store.get("email", "") : CFG.email);
+</script>
+<script>
+/* Demo layout: labeled tiles only, grouped by status, and every group drawn as a compact, centered cluster inside one map. */
+(function(){
+  S.size = "l";
+  S.group = "status";
+  S.fill = "overview";
+  const base = layoutAll;
+  layoutAll = function(){
+    const r = 40, gap = 7, hw = Math.sqrt(3) * r, sx = hw + gap;
+    const inner = Math.max(260, (mapEl.clientWidth || 900) - 48);
+    const maxCols = Math.max(1, Math.floor((inner - hw / 2 - 3) / sx));
+    mapEl.querySelectorAll(".group").forEach(g => {
+      const n = (g._list || []).length || 1;
+      let cols = n <= 3 ? n : Math.ceil(Math.sqrt(n * 2.2));
+      cols = Math.max(1, Math.min(cols, maxCols, n));
+      const w = Math.ceil(cols * sx + hw / 2 + 2.5);
+      g.style.width = w + "px";
+      const wrap = g.querySelector(".hexwrap"); if (wrap) wrap.style.width = w + "px";
+    });
+    base();
+    // full names on two lines instead of a truncated single line
+    const byId = {}; (ACC || []).forEach(a => byId[a.id] = a);
+    mapEl.querySelectorAll("svg.hex g[data-id] text").forEach(t => {
+      const a = byId[t.parentNode.dataset.id]; if (!a) return;
+      const words = String(a.n).split(/\s+/), lines = [];
+      words.forEach(w => { const l = lines[lines.length - 1]; if (l != null && (l + " " + w).length <= 11) lines[lines.length - 1] = l + " " + w; else lines.push(w); });
+      const L = lines.slice(0, 2).map((l, i, arr) => i === arr.length - 1 && lines.length > 2 ? l.slice(0, 10) + "…" : l.length > 12 ? l.slice(0, 11) + "…" : l);
+      const x = t.getAttribute("x"), y0 = +t.getAttribute("y") - 3, dy = 11;
+      t.textContent = "";
+      L.forEach((l, i) => { const s = document.createElementNS("http://www.w3.org/2000/svg", "tspan"); s.setAttribute("x", x); s.setAttribute("y", y0 + 3 + (i - (L.length - 1) / 2) * dy); s.textContent = l; t.appendChild(s); });
+    });
+  };
+})();
+</script>
+<script>
+/* Demo data: a made-up patch of companies, people and signals. Every name, domain and number here is invented.
+   Dates are relative to today, so the demo always looks current. Press "Reshuffle demo data" for a new patch. */
+(function(){
+  function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  let R = rng(42);
+  const pick = a => a[Math.floor(R() * a.length)], int = (lo, hi) => lo + Math.floor(R() * (hi - lo + 1)), chance = p => R() < p;
+  const day = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const A1 = ["North","Blue","Cedar","Lumen","Vector","Harbor","Summit","Atlas","Quill","Ember","Pioneer","Orbit","Juniper","Copper","Granite","Nimbus","Tidal","Beacon","Falcon","Maple","Kestrel","Aurora","Mesa","Cobalt","Willow","Prairie","Redwood","Signal","Sparrow","Basalt"];
+  const A2 = ["Labs","Health","Logistics","Analytics","Robotics","Pay","Learning","Freight","Energy","Media","Systems","Bio","Games","Cloud","Works","Mobility","Markets","Security","Foods","Travel"];
+  const IND = ["software","healthcare","financial services","retail","logistics","education","media","manufacturing","energy","real estate"];
+  const CITY = [["San Francisco","CA"],["Oakland","CA"],["San Jose","CA"],["Los Angeles","CA"],["San Diego","CA"],["Seattle","WA"],["Portland","OR"],["Denver","CO"],["Boulder","CO"],["Salt Lake City","UT"],["Phoenix","AZ"],["Austin","TX"],["Boise","ID"],["Las Vegas","NV"]];
+  const FN = ["Avery","Jordan","Priya","Marcus","Elena","Sam","Noah","Maya","Diego","Hannah","Leo","Grace","Omar","Chloe","Ravi","Tessa","Ivan","Nina","Caleb","Zoe","Felix","Aria","Mateo","Lena"];
+  const LN = ["Park","Okafor","Nguyen","Shah","Fischer","Moreno","Kim","Bennett","Alvarez","Cho","Patel","Larsen","Haddad","Reyes","Brooks","Ito","Novak","Silva","Mendez","Quinn"];
+  const TITLES = ["VP of Engineering","Director of Platform Engineering","Head of SRE","Staff Software Engineer","CTO","Engineering Manager","DevOps Lead","Principal Engineer","Director of IT","Cloud Architect","Senior SRE","Head of Infrastructure"];
+  const CLOUD = ["AWS","Google Cloud","Azure"];
+  const person = dom => { const f = pick(FN), l = pick(LN); return { name: f + " " + l, email: (f[0] + l).toLowerCase() + "@" + dom, title: pick(TITLES) }; };
+
+  function build(n){
+    const ids = [], r = { accounts:[], metrics:{}, psa:{}, meetings:{}, personas:{}, opps:{}, demandbase:{ asOf: day(-1), rows:{} }, intricately:{}, touches:{}, leads:{}, orgs:{}, orphans:[], __visible:n };
+    const used = new Set();
+    for (let i = 0; i < n; i++){
+      let nm; do { nm = pick(A1) + " " + pick(A2); } while (used.has(nm)); used.add(nm);
+      const id = "demo" + String(i).padStart(4, "0"), dom = nm.toLowerCase().replace(/\s+/g, "") + ".example";
+      const st = chance(.22) ? "paying customer" : chance(.15) ? "churned customer" : "prospect";
+      const [city, stt] = pick(CITY), emp = pick([12, 25, 40, 60, 85, 120, 180, 240, 320, 450, 700]);
+      ids.push(id);
+      r.accounts.push({ id, n: nm.toLowerCase(), st, vis:1, tier: st === "paying customer" ? pick(["tier 3","tier 4"]) : null, ind: pick(IND), emp, loc: `${city.toLowerCase()}, ${stt}`, dom,
+        mrr: st === "paying customer" ? int(2, 40) * 250 : null, fcw: st !== "prospect" ? day(-int(200, 1400)) : null,
+        notes: chance(.35) ? pick(["Running a homegrown Prometheus stack, open to a POC next quarter.","Champion moved teams; need a new entry point in platform eng.","Evaluating observability vendors ahead of a Kubernetes migration.","Budget resets in January. Revisit in early Q1.","Interested in log management cost controls."]) : null,
+        nd: day(-int(5, 120)), desc: `${nm} builds ${pick(["software for","tools for","a platform for","services for"])} ${pick(["clinics","shippers","schools","retailers","lenders","creators","field teams","manufacturers"])}.`, pla: day(-int(1, 200)) });
+      // outreach
+      const lastTouch = chance(.15) ? null : -int(1, 150), hot = lastTouch != null && lastTouch > -14 && chance(.3);
+      const m14 = hot ? int(5, 8) : lastTouch != null && lastTouch > -14 ? int(1, 3) : 0, m30 = m14 + (lastTouch != null && lastTouch > -30 ? int(0, 3) : 0), m90 = lastTouch == null ? 0 : m30 + (lastTouch > -90 ? int(0, 4) : 0);
+      r.metrics[id] = { ml: lastTouch == null ? null : day(lastTouch), m14, m30, m90, cn: int(0, 3), rp: int(0, 4), al: lastTouch == null ? null : day(lastTouch), a14: m14, a30: m30, a90: m90 };
+      // signals
+      const sig = [];
+      const ns = chance(.45) ? int(1, 3) : 0;
+      for (let k = 0; k < ns; k++){
+        const t = pick(["fund","exec","hok","init","hire","obs"]), d = day(-int(2, 170)), p = person(dom);
+        if (t === "fund") sig.push([d, "funding round", `Funding Date: ${new Date(d).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })} Funding Round: ${pick(["series_a","series_b","series_c","seed"])} Funding Amount: USD ${int(8, 90)} million`]);
+        if (t === "exec") sig.push([d, "new exec stakeholder - vp+", `${p.name} job title: ${pick(["VP of Engineering","CTO","VP of Infrastructure"])}`]);
+        if (t === "hok") sig.push([d, chance(.5) ? "hok tracking - 90th+ pct power user" : "hok tracking - power user", `${p.name} job title: ${pick(TITLES)}`]);
+        if (t === "init") sig.push([d, "corporate initiative - cloud migration", pick(["Migrating core services to Kubernetes on " + pick(CLOUD), "Consolidating monitoring tools to cut spend", "Launching a new real-time payments product", "Moving the data platform to the cloud"])]);
+        if (t === "hire") sig.push([d, "hiring trend - engineering headcount", `Engineering headcount up ${int(10, 45)}% in 6 months`]);
+        if (t === "obs") sig.push([d, "first time observability mention", `Job post for a Senior SRE mentions OpenTelemetry and on-call dashboards`]);
+      }
+      if (sig.length) r.psa[id] = sig.sort((a, b) => b[0].localeCompare(a[0]));
+      // people
+      const ppl = []; for (let k = 0, np = int(1, 6); k < np; k++){ const p = person(dom); ppl.push([p.name, p.title, chance(.5) ? day(-int(3, 300)) : null, p.email, "", ""]); }
+      r.personas[id] = ppl;
+      // meetings
+      const mt = [];
+      if (chance(.4)) for (let k = 0, nm2 = int(1, 4); k < nm2; k++){ const p = pick(ppl); mt.push([day(-int(3, 330)), pick(["Discovery call","Intro: observability","Technical deep dive","Pricing review","Quarterly check-in"]), "meeting", "completed", `${p[0]} (${p[1]})`]); }
+      if (chance(.15)){ const p = pick(ppl); mt.push([day(int(2, 30)), pick(["Follow-up demo","POC kickoff","Renewal planning"]), "meeting", "scheduled", `${p[0]} (${p[1]})`]); }
+      if (mt.length) r.meetings[id] = mt.sort((a, b) => b[0].localeCompare(a[0]));
+      // opportunities
+      if (chance(.25)){ const open = chance(.5); r.opps[id] = [{ nm: `${nm} - ${pick(["Infrastructure","APM","Logs","Expansion"])}`, ty: pick(["new business","expansion"]), sg: open ? pick(["1 - qualify","2 - discovery","3 - evaluation","4 - proposal"]) : pick(["closed won","closed lost"]), cd: day(-int(20, 300)), cl: day(open ? int(10, 120) : -int(5, 200)), dr: null, dn: null, pc: null, ns: open ? "Send POC success criteria; confirm security review owner." : null, mrr: int(4, 30) * 250, pain: open ? pick(["Alert fatigue from three overlapping tools.","No tracing across microservices; slow incident response.","Log costs growing faster than revenue."]) : null }]; }
+      // intent
+      if (chance(.4)) r.demandbase.rows[id] = { em: Math.round(R() * 60 * 10) / 10, nkw: int(0, 4), ntr: int(0, 2), tpv: int(0, 30), kw: ["kubernetes monitoring","apm*","log management","opentelemetry","cloud cost*","incident response"].filter(() => chance(.35)), pg: chance(.6) ? [["/pricing", int(1, 9)], ["/product/apm", int(1, 6)], ["/blog/kubernetes", int(1, 4)]].slice(0, int(1, 3)) : [] };
+      // tech stack
+      if (chance(.7)) r.intricately[id] = { cloud: pick(CLOUD), tier: pick(["$1k-$10k","$10k-$50k","$50k-$100k"]), spend: int(1, 60) * 500, nr: chance(.2) ? int(1, 20) * 100 : 0, dyn: chance(.08) ? int(1, 20) * 100 : 0, splunk: chance(.15) ? int(1, 30) * 100 : 0, elastic: chance(.12) ? int(1, 10) * 100 : 0, k8s: chance(.35) ? int(1, 40) * 100 : 0, traffic: int(-20, 80) };
+      // recent touches
+      if (lastTouch != null){ const t = []; for (let k = 0, nt = Math.min(8, m90 || 1); k < nt; k++){ const p = pick(ppl), call = chance(.35); t.push([day(lastTouch - k * int(2, 6)), call ? pick(["call/connect","call/no answer","call/left voicemail"]) : pick(["email/","email/reply","linkedin/"]), p[0], call ? "Call" : pick(["Quick question on your monitoring setup","Following up","Idea for your Kubernetes rollout"])]); } r.touches[id] = t; }
+      // leads (in LEAD_KEYS order)
+      if (chance(.4)){ const L = []; for (let k = 0, nl = int(1, 3); k < nl; k++){ const p = person(dom), trial = chance(.35), cd = day(-int(1, 200)), touched = chance(.6);
+        L.push([id + "L" + k, p.name, p.title, p.email, trial ? "working" : pick(["open","nurture","working"]), 0, "sfdc", 1, cd, touched ? cd : null, trial ? "Started a free trial" : pick(["Downloaded: Kubernetes monitoring guide","Attended webinar: Logs without the bill","Visited pricing page"]), cd, pick(["trial","webinar","content","website"]), touched ? int(1, 6) : 0, touched ? int(1, 4) : 0, touched ? day(-int(0, 30)) : null, touched && chance(.3) ? 1 : 0, touched ? int(0, 3) : 0, touched ? int(0, 2) : 0, touched && chance(.2) ? 1 : 0, trial ? 1 : 0, trial ? int(2, 40) : 0, trial ? int(0, 12) : 0, 0, cd, 0]); }
+        r.leads[id] = L; }
+    }
+    return r;
+  }
+
+  async function showDemo(seed){
+    R = rng(seed);
+    const r = build(int(70, 90));
+    assemble(CFG.email, { id: "demo", name: CFG.name }, r);
+    const p = {}; DATA.accounts.filter(a => a.st !== "churned customer").forEach((a, i) => { if (i % 7 === 0) p[a.id] = { t: 1 + (i % 4), note: "Demo priority" }; });
+    try { const db = await window.claude.use("db"); await db.doc(PRIO_DOC()).set({ accounts: p, updated: DATA.asOf }); } catch(e){}
+    show(DATA); setStatus("Demo data: every company, person and number here is made up.", "ok");
+    try { await prioLoad(); } catch(e){}
+  }
+  let seed = 42;
+  const btn = document.getElementById("loadBtn"), clone = btn.cloneNode(true); btn.replaceWith(clone);
+  clone.textContent = "Reshuffle demo data"; clone.disabled = false;
+  clone.addEventListener("click", () => { seed = Math.floor(Math.random() * 1e9); showDemo(seed); });
+  showDemo(seed);
+})();
+</script>
+</body>
+</html>
