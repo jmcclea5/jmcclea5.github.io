@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Good Work Hub · UX Case Study · Jared McCleary</title>
+  <meta name="description" content="UX case study: redesigning onboarding for Good Work Hub, a volunteer-management platform for charities.">
+  <link rel="icon" href="OGLOGO.png">
+  <link rel="stylesheet" href="style.css">
+  <script src="Website.js" defer></script>
+  <style>
+    .cs-hero { padding: 64px 0 40px; }
+    .cs-hero h1 { font-size: clamp(32px, 5vw, 46px); }
+    .back { display: inline-block; margin-bottom: 20px; font-size: 14px; color: var(--muted); text-decoration: none; }
+    .back:hover { color: var(--ink); }
+    .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--line); }
+    .meta dt { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); margin-bottom: 4px; }
+    .meta dd { font-size: 15px; color: var(--muted); }
+    .shot { margin: 28px 0 8px; }
+    .shot img, .shot video { width: 100%; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
+    .shot figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+    .section p + p { margin-top: 14px; }
+    .section > p { color: var(--muted); max-width: 680px; }
+    .quotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 24px; }
+    .quote { background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px; padding: 18px; font-size: 16px; line-height: 1.5; }
+    .themes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; }
+    .theme { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+    .theme b { display: block; margin-bottom: 4px; }
+    .theme span { font-size: 14px; color: var(--muted); }
+    .theme.hot { border-color: var(--accent); background: #eef3fd; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .persona { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 28px; margin-top: 24px; }
+    .persona h3 { margin-top: 0; }
+    .persona h4 { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); margin: 16px 0 6px; }
+    .persona ul { padding-left: 18px; color: var(--muted); font-size: 15px; }
+    .persona blockquote { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 18px; font-style: italic; color: var(--ink); }
+    .step { margin-top: 48px; }
+    .step h3 { font-size: 19px; }
+    .step > p { color: var(--muted); max-width: 680px; }
+    .results { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 24px; }
+    .goals { margin-top: 16px; padding-left: 18px; color: var(--muted); }
+    .next { margin-top: 20px; padding-left: 18px; color: var(--muted); }
+    .next li + li, .goals li + li { margin-top: 6px; }
+    @media (max-width: 680px) {
+      .meta, .quotes, .themes, .two, .persona, .results { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <a href="index.html" class="nav-name">JM</a>
+    <button class="nav-toggle" aria-label="Menu" onclick="toggleNav()">&#9776;</button>
+    <div class="nav-links">
+      <a href="index.html#story">Story</a>
+      <a href="index.html#work">Work</a>
+      <a href="crm-demo.html">CRM Demo</a>
+      <a href="index.html#contact">Contact</a>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- HERO -->
+    <section class="cs-hero">
+      <a class="back" href="index.html">&larr; Back to home</a>
+      <p class="eyebrow">UX case study · General Assembly · 2023</p>
+      <h1>Good Work Hub: helping new volunteers find their footing</h1>
+      <p class="lede">
+        A proposed redesign of a volunteer-management platform for charities, focused on the
+        first few minutes after a volunteer signs up.
+      </p>
+      <dl class="meta">
+        <div><dt>Team</dt><dd>Double Diamond UX (team project)</dd></div>
+        <div><dt>Timeline</dt><dd>June 2023</dd></div>
+        <div><dt>Focus</dt><dd>Onboarding</dd></div>
+        <div><dt>Methods</dt><dd>Heuristic review, user testing, persona, prototyping</dd></div>
+      </dl>
+      <figure class="shot">
+        <img src="gwh-landing.jpg" alt="Good Work Hub landing page: the coordination platform for growing charities to manage volunteers">
+      </figure>
+    </section>
+
+    <!-- PROBLEM -->
+    <section class="section">
+      <h2>The problem</h2>
+      <p>
+        Good Work Hub gives charities one place to manage their volunteers: teams, events, files and messages.
+        Signing up was quick and easy. But once new volunteers got inside, nothing told them what to do next,
+        and many stalled on the very first screen.
+      </p>
+      <div class="quotes">
+        <div class="quote">“There was nothing on the first page to give me any insight or direction.”</div>
+        <div class="quote">“I was very confused and didn’t know where to go or how to even start.”</div>
+        <div class="quote">“I was not given enough information after signing up.”</div>
+      </div>
+    </section>
+
+    <!-- RESEARCH -->
+    <section class="section">
+      <h2>What we found</h2>
+      <p>
+        We tested the existing platform with first-time users and ran a heuristic evaluation alongside it.
+        Small interface problems (overlapping text, misaligned buttons, low contrast, inconsistent controls)
+        all added up to the same frustration for someone seeing the platform for the first time.
+      </p>
+      <div class="two">
+        <figure class="shot"><img src="gwh-heuristic-1.jpg" alt="Heuristic evaluation: text overlapping buttons, misaligned buttons, low contrast on the calendar"></figure>
+        <figure class="shot"><img src="gwh-heuristic-2.jpg" alt="Heuristic evaluation: inconsistent button spacing and buttons partially offscreen"></figure>
+      </div>
+      <div class="themes">
+        <div class="theme"><b>Sign up</b><span>Simple and easy for everyone</span></div>
+        <div class="theme hot"><b>Onboarding</b><span>Users were confused about what features did</span></div>
+        <div class="theme hot"><b>Functionality</b><span>Frustration at features whose purpose was unclear</span></div>
+        <div class="theme"><b>Technical errors</b><span>Problems navigating right after sign-up</span></div>
+      </div>
+    </section>
+
+    <!-- PERSONA -->
+    <section class="section">
+      <h2>Who we designed for</h2>
+      <p>The research pointed to one person: a willing volunteer who is comfortable online, but gets lost when a new tool gives her no guidance.</p>
+      <div class="persona">
+        <div>
+          <h3>Brenda Smith, 55</h3>
+          <p style="color:var(--muted)">Retired banker in San Jose, CA, now volunteering with local charities. Comfortable with email and browsing, but wouldn’t call herself tech-savvy.</p>
+          <h4>Needs &amp; goals</h4>
+          <ul>
+            <li>A tool that is intuitive and straightforward</li>
+            <li>A tutorial or guide when picking up something new</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Frustrations</h4>
+          <ul>
+            <li>No onboarding when she starts using a new system</li>
+            <li>Technical problems she can’t solve on her own make her want to quit</li>
+          </ul>
+          <h4>Behaviors</h4>
+          <ul>
+            <li>Patient and willing to learn</li>
+            <li>Prefers to be guided through a new platform step by step</li>
+          </ul>
+        </div>
+        <blockquote>“Technology is just another tool, not a barrier. I believe a little guidance would go a long way in making these digital tools work for me, not against me.”</blockquote>
+      </div>
+    </section>
+
+    <!-- SOLUTION -->
+    <section class="section">
+      <h2>The solution: guided onboarding</h2>
+      <p>Rather than redesigning every screen, we added a layer of guidance that meets volunteers the moment they log in and walks them through each part of the platform at their own pace.</p>
+
+      <div class="step">
+        <p class="eyebrow">01</p>
+        <h3>A welcome that offers a tour</h3>
+        <p>Right after sign-up, volunteers get a personal welcome tied to their role and organization, with the choice to start a tour now or come back to it later.</p>
+        <figure class="shot"><img src="gwh-welcome.jpg" alt="Welcome to Good Work Hub, Brenda modal with Do It Later and Get Started buttons"></figure>
+      </div>
+
+      <div class="step">
+        <p class="eyebrow">02</p>
+        <h3>Short walkthroughs for each section</h3>
+        <p>Each area (directory, calendar, files, inbox) has a few small tips that point at the real controls and tell people what to do there.</p>
+        <div class="two">
+          <figure class="shot"><img src="gwh-invite.jpg" alt="Directory walkthrough: inviting new members"><figcaption>Directory: inviting new members</figcaption></figure>
+          <figure class="shot"><img src="gwh-add-event.jpg" alt="Calendar walkthrough: adding an event"><figcaption>Calendar: adding an event</figcaption></figure>
+          <figure class="shot"><img src="gwh-files.jpg" alt="Files walkthrough: searching for files"><figcaption>Files: finding documents</figcaption></figure>
+          <figure class="shot"><img src="gwh-inbox.jpg" alt="Inbox walkthrough introduction"><figcaption>Inbox: sending a first message</figcaption></figure>
+        </div>
+      </div>
+
+      <div class="step">
+        <p class="eyebrow">03</p>
+        <h3>Progress you can see</h3>
+        <p>An onboarding progress ring on the dashboard and a checklist on the profile show volunteers what they’ve finished and what’s left, so they can pick up where they left off.</p>
+        <div class="two">
+          <figure class="shot"><img src="gwh-dashboard.jpg" alt="Dashboard with onboarding progress indicator"><figcaption>Dashboard with onboarding progress</figcaption></figure>
+          <figure class="shot"><img src="gwh-profile.jpg" alt="Profile page with walkthrough checklist"><figcaption>Profile checklist of completed walkthroughs</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROTOTYPE -->
+    <section class="section">
+      <h2>The prototype</h2>
+      <p>A full run-through, from sign-up to the end of the inbox walkthrough.</p>
+      <figure class="shot">
+        <video src="gwh-prototype.mp4" poster="gwh-prototype-poster.jpg" controls muted playsinline preload="none"></video>
+      </figure>
+    </section>
+
+    <!-- TESTING -->
+    <section class="section">
+      <h2>Testing it</h2>
+      <p>We ran unmoderated usability tests on the prototype against two goals:</p>
+      <ul class="goals">
+        <li>Complete sign-up in under 30 seconds with no more than 1 error</li>
+        <li>Complete onboarding in under 3 minutes with no more than 5 errors</li>
+      </ul>
+      <div class="stats" style="margin-top:24px; grid-template-columns: repeat(2, 1fr)">
+        <div class="stat"><span class="stat-num">89.3</span><span class="stat-label">average usability score</span></div>
+        <div class="stat"><span class="stat-num">12.3%</span><span class="stat-label">of clicks landed outside the target</span></div>
+      </div>
+      <p style="margin-top:24px">The misclicks clustered in two places, which told us exactly what to fix:</p>
+      <div class="results">
+        <figure class="shot"><img src="gwh-test-invite.jpg" alt="Click map on the invite walkthrough showing scattered clicks"><figcaption>Scattered clicks: users weren’t sure which button moved them forward.</figcaption></figure>
+        <figure class="shot"><img src="gwh-test-event.jpg" alt="Click map on the add-event walkthrough showing clicks on purple text"><figcaption>Purple tip text looked like a link, so users clicked it instead of the real “Add Event” button.</figcaption></figure>
+      </div>
+      <h3 style="margin-top:32px">What I’d do next</h3>
+      <ul class="next">
+        <li>Give every tip one obvious “next” action, in the same place each time</li>
+        <li>Keep instructional text visually different from links</li>
+        <li>Fix the original heuristic issues (alignment, contrast, offscreen buttons) so the tour sits on a clean foundation</li>
+      </ul>
+    </section>
+
+    <!-- TAKEAWAY -->
+    <section class="section">
+      <h2>What I took from it</h2>
+      <p>
+        The biggest problem wasn’t a missing feature, it was a missing next step. That lesson carried straight into sales:
+        find where someone gets stuck, then make the next step obvious. It’s how I run discovery, and it’s why I built
+        <a href="crm-demo.html">my own CRM</a>.
+      </p>
+      <p style="margin-top:28px"><a class="btn" href="index.html">&larr; Back to home</a></p>
+    </section>
+
+  </main>
+
+  <footer class="footer">© <span id="year"></span> Jared McCleary</footer>
+</body>
+</html>
